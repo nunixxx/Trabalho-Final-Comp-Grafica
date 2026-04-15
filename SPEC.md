@@ -6,16 +6,17 @@
 
 ## Integrantes da dupla
 
-- **Aluno 1 - Nome**: <mark>`<preencher>`</mark>
-- **Aluno 1 - Cartão UFRGS**: <mark>`<preencher>`</mark>
+- **Aluno 1 - Nome**: <mark>`Caio Felipe Ferreira Nunes`</mark>
+- **Aluno 1 - Cartão UFRGS**: <mark>`00588024`</mark>
 
-- **Aluno 2 - Nome**: <mark>`<preencher>`</mark>
-- **Aluno 2 - Cartão UFRGS**: <mark>`<preencher>`</mark>
+- **Aluno 2 - Nome**: <mark>`João Kenji Suwa`</mark>
+- **Aluno 2 - Cartão UFRGS**: <mark>`00587808`</mark>
 
 ## Detalhes do que será implementado
 
-- **Título do trabalho**: <mark>`<preencher>`</mark>
-- **Parágrafo curto descrevendo o que será implementado**: <mark>`<preencher>`</mark>
+- **Título do trabalho**: <mark>`Doom`</mark>
+- **Parágrafo curto descrevendo o que será implementado**: 
+Será implementado um jogo baseado na [primeira fase](https://www.youtube.com/watch?v=MnqLJpgq7jc) do Doom
 
 ## Especificação visual
 
@@ -34,7 +35,7 @@
 >   do próprio repositório. Mas, garanta que qualquer um tenha
 >   permissão de acesso ao vídeo através deste link.
 
-<mark>`<preencher>`</mark>
+<mark>`<[Primeira Fase](https://www.youtube.com/watch?v=MnqLJpgq7jc) >`</mark>
 
 ### Vídeo - Timestamp
 
@@ -43,8 +44,8 @@
 >   será a base de comparação para avaliar se o seu trabalho final
 >   conseguiu ou não reproduzir a referência.
 
-- **Timestamp inicial**: <mark>`<preencher>`</mark>
-- **Timestamp final**: <mark>`<preencher>`</mark>
+- **Timestamp inicial**: <mark>`<0:10>`</mark>
+- **Timestamp final**: <mark>`<0:40>`</mark>
 
 ### Imagens
 
