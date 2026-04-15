@@ -35,7 +35,7 @@ Será implementado um jogo baseado na [primeira fase](https://www.youtube.com/wa
 >   do próprio repositório. Mas, garanta que qualquer um tenha
 >   permissão de acesso ao vídeo através deste link.
 
-<mark>`<[Primeira Fase](https://www.youtube.com/watch?v=MnqLJpgq7jc) >`</mark>
+<mark>`[Primeira Fase](https://www.youtube.com/watch?v=MnqLJpgq7jc)`</mark>
 
 ### Vídeo - Timestamp
 
