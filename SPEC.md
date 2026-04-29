@@ -52,9 +52,9 @@ Será implementado um jogo versão 3D baseado na [primeira fase](https://www.you
 > [!IMPORTANT]
 > - Coloquei aqui **três imagens** capturadas do vídeo acima, que você
 >   irá usar como ilustração para as explicações que vêm abaixo.
-(/images/DoomItens.png "Itens Dropados.")
-(/images/DoomEnime.png "Inimigos.")
-(/images/DoomRoom.png "Visao da sala.")
+![Itens Dropador](/images/DoomItens.png "Itens Dropados.")
+![Inimigos](/images/DoomEnime.png "Inimigos.")
+![Sala Doom](/images/DoomRoom.png "Visao da sala.")
 
 
 ## Especificação textual
@@ -62,9 +62,9 @@ Será implementado um jogo versão 3D baseado na [primeira fase](https://www.you
 > [!IMPORTANT]
 > - Coloquei aqui **três imagens** capturadas do vídeo acima, que você
 >   irá usar como ilustração para as explicações que vêm abaixo.
-(/images/DoomItens.png "Itens Dropados.")
-(/images/DoomEnime.png "Inimigos.")
-(/images/DoomRoom.png "Visao da sala.")
+![Itens Dropador](/images/DoomItens.png "Itens Dropados.")
+![Inimigos](/images/DoomEnime.png "Inimigos.")
+![Sala Doom](/images/DoomRoom.png "Visao da sala.")
 
 Para cada um dos requisitos abaixo (detalhados no [Enunciado do Trabalho final - Moodle](https://moodle.ufrgs.br/mod/assign/view.php?id=6018620)), escreva um parágrafo **curto** explicando como este requisito será atendido, apontando itens específicos do vídeo/imagens que você incluiu acima que atendem estes requisitos.
 
