@@ -14,9 +14,9 @@
 
 ## Detalhes do que será implementado
 
-- **Título do trabalho**: <mark>`Doom`</mark>
+- **Título do trabalho**: <mark>`Doom 1 - 3D Version`</mark>
 - **Parágrafo curto descrevendo o que será implementado**: 
-Será implementado um jogo baseado na [primeira fase](https://www.youtube.com/watch?v=MnqLJpgq7jc) do Doom
+Será implementado um jogo versão 3D baseado na [primeira fase](https://www.youtube.com/watch?v=MnqLJpgq7jc) do Doom 1
 
 ## Especificação visual
 
@@ -52,43 +52,48 @@ Será implementado um jogo baseado na [primeira fase](https://www.youtube.com/wa
 > [!IMPORTANT]
 > - Coloquei aqui **três imagens** capturadas do vídeo acima, que você
 >   irá usar como ilustração para as explicações que vêm abaixo.
+(/images/DoomItens.png "Itens Dropados.")
+(/images/DoomEnime.png "Inimigos.")
+(/images/DoomRoom.png "Visao da sala.")
 
-<mark>`<preencher>`</mark>
 
 ## Especificação textual
 
 > [!IMPORTANT]
 > - Coloquei aqui **três imagens** capturadas do vídeo acima, que você
 >   irá usar como ilustração para as explicações que vêm abaixo.
+(/images/DoomItens.png "Itens Dropados.")
+(/images/DoomEnime.png "Inimigos.")
+(/images/DoomRoom.png "Visao da sala.")
 
 Para cada um dos requisitos abaixo (detalhados no [Enunciado do Trabalho final - Moodle](https://moodle.ufrgs.br/mod/assign/view.php?id=6018620)), escreva um parágrafo **curto** explicando como este requisito será atendido, apontando itens específicos do vídeo/imagens que você incluiu acima que atendem estes requisitos.
 
 ### Malhas poligonais complexas
-<mark>`<preencher>`</mark>
+A aplicação utilizará modelos 3D com malhas poligonais complexas para armas, inimigos, itens, etc.
 
 ### Transformações geométricas controladas pelo usuário
-<mark>`<preencher>`</mark>
+O jogador poderá controlar transformações geométricas pela movimentação do personagem e da câmera, além da interação com objetos e inimigos.
 
 ### Diferentes tipos de câmeras
-<mark>`<preencher>`</mark>
+Será implementada uma câmera livre em 1ª pessoa (FPS) e outra free-roam (espectador), possibilitando ao jogador andar livremente pelo cenário enquanto pausado.
 
 ### Instâncias de objetos
-<mark>`<preencher>`</mark>
+O mesmo modelo 3D do inimigo será reutilizado diversas vezes ao longo da fase, permitindo múltiplas instâncias do mesmo objeto.
 
 ### Testes de intersecção
-<mark>`<preencher>`</mark>
+O personagem irá portar uma arma que pode disparar balas contra inimigos/objetos na cena; caso acerte, serão feitos testes de intersecção entre o projétil e o objeto.
 
 ### Modelos de Iluminação em todos os objetos
-<mark>`<preencher>`</mark>
+Todos os objetos possuirão iluminação baseada em shaders, considerando diferentes fontes de luz ao longo do mapa.
 
 ### Mapeamento de texturas em todos os objetos
-<mark>`<preencher>`</mark>
+Todo objeto, sejam eles armas, armaduras ou inimigos, terá suas próprias texturas, mantendo um "banco" de texturas para evitar repetição visual.
 
 ### Movimentação com curva Bézier cúbica
-<mark>`<preencher>`</mark>
+Cada inimigo terá sua trajetória definida por uma curva de Bézier cúbica, mantendo uma movimentação suave.
 
 ### Animações baseadas no tempo ($\Delta t$)
-<mark>`<preencher>`</mark>
+Todas as movimentações da aplicação serão baseadas no tempo decorrido entre frames, utilizando a técnica de delta time. Dessa forma, a velocidade dos objetos e da câmera permanece consistente independentemente da taxa de quadros por segundo (FPS) ou do desempenho do hardware.
 
 ## Limitações esperadas
 
@@ -99,4 +104,5 @@ Para cada um dos requisitos abaixo (detalhados no [Enunciado do Trabalho final -
 > - Para cada item, **explique por que** não será implementado ou por
 >   que será implementado parcialmente.
 
-<mark>`<preencher>`</mark>
+- **Hotbar:** Será feita uma versão simplificada da hotbar inferior do jogador, pois esse não é o foco principal do trabalho.
+- **Fase parcial:** Devido ao tamanho da fase e aos detalhes presentes ao longo dela, será implementada apenas parte do cenário, para que seja possível manter o foco nos detalhes e nos conceitos de Computação Gráfica.
