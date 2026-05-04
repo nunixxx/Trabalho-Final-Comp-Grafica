@@ -83,6 +83,9 @@ O mesmo modelo 3D do inimigo será reutilizado diversas vezes ao longo da fase, 
 ### Testes de intersecção
 O personagem irá portar uma arma que pode disparar balas contra inimigos/objetos na cena; caso acerte, serão feitos testes de intersecção entre o projétil e o objeto.
 
+> Comentário Professor: Não terá testes de colisão do personagem com paredes, etc?
+Serão feitos testes de colisão com o cenário. 
+
 ### Modelos de Iluminação em todos os objetos
 Todos os objetos possuirão iluminação baseada em shaders, considerando diferentes fontes de luz ao longo do mapa.
 
@@ -91,6 +94,9 @@ Todo objeto, sejam eles armas, armaduras ou inimigos, terá suas próprias textu
 
 ### Movimentação com curva Bézier cúbica
 Cada inimigo terá sua trajetória definida por uma curva de Bézier cúbica, mantendo uma movimentação suave.
+
+> Comentário Professor: Os inimigos se movimentarão na direção do jogador?
+Os inimigos terão uma trajetoria pré definida e seguirão o jogador caso ele entre em um raio de visão 'x'.
 
 ### Animações baseadas no tempo ($\Delta t$)
 Todas as movimentações da aplicação serão baseadas no tempo decorrido entre frames, utilizando a técnica de delta time. Dessa forma, a velocidade dos objetos e da câmera permanece consistente independentemente da taxa de quadros por segundo (FPS) ou do desempenho do hardware.
