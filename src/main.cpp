@@ -199,6 +199,14 @@ float g_CameraTheta = 0.0f; // Ângulo no plano ZX em relação ao eixo Z
 float g_CameraPhi = 0.0f;   // Ângulo em relação ao eixo Y
 float g_CameraDistance = 3.5f; // Distância da câmera para a origem
 
+// Controle de tipo de câmera
+bool g_FreeCam = false;
+
+// FreeCam
+glm::vec4 g_FreeCamPosition = glm::vec4(0.0f, 1.0f, 3.5f, 1.0f);
+float g_FreeCamYaw = -3.141592f/2.0f;
+float g_FreeCamPitch = 0.0f;
+
 // Variáveis que controlam rotação do antebraço
 float g_ForearmAngleZ = 0.0f;
 float g_ForearmAngleX = 0.0f;
@@ -353,25 +361,49 @@ int main(int argc, char* argv[])
         // os shaders de vértice e fragmentos).
         glUseProgram(g_GpuProgramID);
 
-        // Computamos a posição da câmera utilizando coordenadas esféricas.  As
-        // variáveis g_CameraDistance, g_CameraPhi, e g_CameraTheta são
-        // controladas pelo mouse do usuário. Veja as funções CursorPosCallback()
-        // e ScrollCallback().
-        float r = g_CameraDistance;
-        float y = r*sin(g_CameraPhi);
-        float z = r*cos(g_CameraPhi)*cos(g_CameraTheta);
-        float x = r*cos(g_CameraPhi)*sin(g_CameraTheta);
+        glm::vec4 camera_position_c;
+        glm::vec4 camera_lookat_l;
+        glm::vec4 camera_view_vector;
+        glm::vec4 camera_up_vector = glm::vec4(0.0f,1.0f,0.0f,0.0f);
 
-        // Abaixo definimos as varáveis que efetivamente definem a câmera virtual.
-        // Veja slides 195-227 e 229-234 do documento Aula_08_Sistemas_de_Coordenadas.pdf.
-        glm::vec4 camera_position_c  = glm::vec4(x,y,z,1.0f); // Ponto "c", centro da câmera
-        glm::vec4 camera_lookat_l    = glm::vec4(0.0f,0.0f,0.0f,1.0f); // Ponto "l", para onde a câmera (look-at) estará sempre olhando
-        glm::vec4 camera_view_vector = camera_lookat_l - camera_position_c; // Vetor "view", sentido para onde a câmera está virada
-        glm::vec4 camera_up_vector   = glm::vec4(0.0f,1.0f,0.0f,0.0f); // Vetor "up" fixado para apontar para o "céu" (eito Y global)
+        if (!g_FreeCam)
+        {
+            // =========================
+            // CÂMERA LOOK-AT (3ª pessoa)
+            // =========================
 
-        // Computamos a matriz "View" utilizando os parâmetros da câmera para
-        // definir o sistema de coordenadas da câmera.  Veja slides 2-14, 184-190 e 236-242 do documento Aula_08_Sistemas_de_Coordenadas.pdf.
-        glm::mat4 view = Matrix_Camera_View(camera_position_c, camera_view_vector, camera_up_vector);
+            float r = g_CameraDistance;
+            float y = r*sin(g_CameraPhi);
+            float z = r*cos(g_CameraPhi)*cos(g_CameraTheta);
+            float x = r*cos(g_CameraPhi)*sin(g_CameraTheta);
+
+            camera_position_c = glm::vec4(x,y,z,1.0f);
+            camera_lookat_l   = glm::vec4(0.0f,0.0f,0.0f,1.0f);
+
+            camera_view_vector = camera_lookat_l - camera_position_c;
+        }
+        else
+        {
+            // =========================
+            // FREECAM (1ª pessoa)
+            // =========================
+
+            glm::vec4 front;
+
+            front.x = cos(g_FreeCamPitch) * cos(g_FreeCamYaw);
+            front.y = sin(g_FreeCamPitch);
+            front.z = cos(g_FreeCamPitch) * sin(g_FreeCamYaw);
+            front.w = 0.0f;
+
+            camera_position_c = g_FreeCamPosition;
+            camera_view_vector = front;
+        }
+
+        glm::mat4 view = Matrix_Camera_View(
+            camera_position_c,
+            camera_view_vector,
+            camera_up_vector
+        );
 
         // Agora computamos a matriz de Projeção.
         glm::mat4 projection;
@@ -446,6 +478,38 @@ int main(int argc, char* argv[])
         // Imprimimos na tela informação sobre o número de quadros renderizados
         // por segundo (frames per second).
         TextRendering_ShowFramesPerSecond(window);
+
+        // =========================
+        // MOVIMENTAÇÃO FREECAM
+        // =========================
+
+        if (g_FreeCam)
+        {
+            float cameraSpeed = 0.03f;
+
+            glm::vec4 front;
+            front.x = cos(g_FreeCamPitch) * cos(g_FreeCamYaw);
+            front.y = sin(g_FreeCamPitch);
+            front.z = cos(g_FreeCamPitch) * sin(g_FreeCamYaw);
+            front.w = 0.0f;
+
+            front = normalize(front);
+
+            glm::vec4 right = crossproduct(front, glm::vec4(0,1,0,0));
+            right = normalize(right);
+
+            if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+                g_FreeCamPosition += front * cameraSpeed;
+
+            if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+                g_FreeCamPosition -= front * cameraSpeed;
+
+            if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+                g_FreeCamPosition -= right * cameraSpeed;
+
+            if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+                g_FreeCamPosition += right * cameraSpeed;
+        }
 
         // O framebuffer onde OpenGL executa as operações de renderização não
         // é o mesmo que está sendo mostrado para o usuário, caso contrário
@@ -1125,7 +1189,7 @@ void CursorPosCallback(GLFWwindow* window, double xpos, double ypos)
     // parâmetros que definem a posição da câmera dentro da cena virtual.
     // Assim, temos que o usuário consegue controlar a câmera.
 
-    if (g_LeftMouseButtonPressed)
+    if (g_LeftMouseButtonPressed && !g_FreeCam)
     {
         // Deslocamento do cursor do mouse em x e y de coordenadas de tela!
         float dx = xpos - g_LastCursorPosX;
@@ -1147,6 +1211,26 @@ void CursorPosCallback(GLFWwindow* window, double xpos, double ypos)
     
         // Atualizamos as variáveis globais para armazenar a posição atual do
         // cursor como sendo a última posição conhecida do cursor.
+        g_LastCursorPosX = xpos;
+        g_LastCursorPosY = ypos;
+    }
+
+    if (g_FreeCam)
+    {
+        float dx = xpos - g_LastCursorPosX;
+        float dy = ypos - g_LastCursorPosY;
+
+        g_FreeCamYaw   += 0.003f * dx;
+        g_FreeCamPitch -= 0.003f * dy;
+
+        float limit = 3.141592f/2.0f - 0.01f;
+
+        if (g_FreeCamPitch > limit)
+            g_FreeCamPitch = limit;
+
+        if (g_FreeCamPitch < -limit)
+            g_FreeCamPitch = -limit;
+
         g_LastCursorPosX = xpos;
         g_LastCursorPosY = ypos;
     }
@@ -1263,6 +1347,20 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mod)
     if (key == GLFW_KEY_O && action == GLFW_PRESS)
     {
         g_UsePerspectiveProjection = false;
+    }
+
+    if (key == GLFW_KEY_SEMICOLON && action == GLFW_PRESS)
+    {
+        g_FreeCam = !g_FreeCam;
+
+        if (g_FreeCam)
+        {
+            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+        }
+        else
+        {
+            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+        }
     }
 
     // Se o usuário apertar a tecla H, fazemos um "toggle" do texto informativo mostrado na tela.
