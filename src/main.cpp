@@ -93,7 +93,7 @@ void PopMatrix(glm::mat4& M);
 void BuildTrianglesAndAddToVirtualScene(ObjModel*);
 void ComputeNormals(ObjModel* model);
 void LoadShadersFromFiles();
-void LoadTextureImage(const char* filename);
+GLuint LoadTextureImage(const char* filename);
 void DrawVirtualObject(const char* object_name);
 GLuint LoadShader_Vertex(const char* filename);
 GLuint LoadShader_Fragment(const char* filename);
@@ -132,10 +132,24 @@ struct SceneObject
     GLuint       vertex_array_object_id;
     glm::vec3    bbox_min;
     glm::vec3    bbox_max;
+    int          material_id;   // índice do material em g_Materials
 };
 
 std::map<std::string, SceneObject> g_VirtualScene;
 std::stack<glm::mat4>  g_MatrixStack;
+
+// =========================================================
+// Sistema de texturas
+// =========================================================
+// Mapeia nome do material -> índice na unidade de textura OpenGL
+std::map<std::string, int>  g_MaterialTextureIndex;
+// Mapeia nome do arquivo de textura -> GLuint (texture object)
+std::map<std::string, GLuint> g_LoadedTextures;
+// Lista ordenada de GLuints para bind no shader (slot 0..N)
+std::vector<GLuint> g_TextureSlots;
+
+// Número máximo de texturas suportado pelo shader
+#define MAX_TEXTURES 64
 
 float g_ScreenRatio = 1.0f;
 
@@ -149,7 +163,7 @@ bool g_MiddleMouseButtonPressed = false;
 
 float g_CameraTheta = 0.0f;
 float g_CameraPhi = 0.4f;
-float g_CameraDistance = 30.0f; // distância adequada para o mapa Doom escalado
+float g_CameraDistance = 30.0f;
 
 bool g_FreeCam = false;
 
@@ -173,8 +187,139 @@ GLint g_projection_uniform;
 GLint g_object_id_uniform;
 GLint g_bbox_min_uniform;
 GLint g_bbox_max_uniform;
+GLint g_texture_index_uniform;
+GLint g_has_texture_uniform;
 
 GLuint g_NumLoadedTextures = 0;
+
+// =========================================================
+// Carrega uma textura PNG e retorna o GLuint, usando cache
+// =========================================================
+GLuint LoadTextureImage(const char* filename)
+{
+    // Cache: não recarrega a mesma imagem
+    auto it = g_LoadedTextures.find(std::string(filename));
+    if (it != g_LoadedTextures.end())
+        return it->second;
+
+    printf("Carregando textura \"%s\"... ", filename);
+
+    stbi_set_flip_vertically_on_load(true);
+    int width, height, channels;
+    unsigned char *data = stbi_load(filename, &width, &height, &channels, 4);
+
+    if (data == NULL)
+    {
+        fprintf(stderr, "AVISO: Não foi possível abrir \"%s\".\n", filename);
+        g_LoadedTextures[std::string(filename)] = 0;
+        return 0;
+    }
+
+    printf("OK (%dx%d, %d canais).\n", width, height, channels);
+
+    GLuint texture_id;
+    glGenTextures(1, &texture_id);
+    glBindTexture(GL_TEXTURE_2D, texture_id);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8_ALPHA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+    glGenerateMipmap(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    stbi_image_free(data);
+
+    g_LoadedTextures[std::string(filename)] = texture_id;
+    return texture_id;
+}
+
+// =========================================================
+// Carrega texturas de todos os materiais do modelo
+// Retorna o índice de slot para um dado nome de material
+// =========================================================
+void LoadMaterialTextures(ObjModel* model, const char* basepath)
+{
+    std::string base(basepath ? basepath : "");
+
+    for (size_t i = 0; i < model->materials.size(); ++i)
+    {
+        const tinyobj::material_t& mat = model->materials[i];
+        const std::string& matname = mat.name;
+
+        // Já processamos este material?
+        if (g_MaterialTextureIndex.count(matname))
+            continue;
+
+        if (mat.diffuse_texname.empty())
+        {
+            // Sem textura: índice -1
+            g_MaterialTextureIndex[matname] = -1;
+            continue;
+        }
+
+        // Monta o caminho completo para o arquivo de textura
+        std::string texpath = base + mat.diffuse_texname;
+
+        GLuint tex_id = LoadTextureImage(texpath.c_str());
+
+        if (tex_id == 0)
+        {
+            // Tenta com extensão em minúsculas caso falhe
+            std::string lower = texpath;
+            for (auto& c : lower) c = tolower(c);
+            tex_id = LoadTextureImage(lower.c_str());
+        }
+
+        if (tex_id == 0)
+        {
+            g_MaterialTextureIndex[matname] = -1;
+            continue;
+        }
+
+        // Atribui ao próximo slot disponível
+        int slot = (int)g_TextureSlots.size();
+        if (slot >= MAX_TEXTURES)
+        {
+            fprintf(stderr, "AVISO: Limite de %d texturas atingido. Material '%s' sem textura.\n",
+                    MAX_TEXTURES, matname.c_str());
+            g_MaterialTextureIndex[matname] = -1;
+            continue;
+        }
+
+        g_TextureSlots.push_back(tex_id);
+        g_MaterialTextureIndex[matname] = slot;
+        printf("Material '%s' -> slot %d (tex_id=%u)\n", matname.c_str(), slot, tex_id);
+    }
+}
+
+// =========================================================
+// Ativa todas as texturas nos slots correspondentes
+// Deve ser chamado após UseProgram e antes do draw loop
+// =========================================================
+void BindAllTextures(GLuint program_id)
+{
+    // Reserva a unidade 31 para o text rendering
+    // Usamos unidades 0..N-1 para nossas texturas
+    for (int i = 0; i < (int)g_TextureSlots.size() && i < MAX_TEXTURES; ++i)
+    {
+        glActiveTexture(GL_TEXTURE0 + i);
+        glBindTexture(GL_TEXTURE_2D, g_TextureSlots[i]);
+    }
+
+    // Passa o array de samplers para o shader
+    // (precisa passar os índices das unidades de textura, não os IDs)
+    int samplers[MAX_TEXTURES];
+    for (int i = 0; i < MAX_TEXTURES; ++i)
+        samplers[i] = i;
+
+    GLint loc = glGetUniformLocation(program_id, "texture_map");
+    if (loc >= 0)
+        glUniform1iv(loc, MAX_TEXTURES, samplers);
+}
 
 int main(int argc, char* argv[])
 {
@@ -227,10 +372,13 @@ int main(int argc, char* argv[])
 
     // =========================================================
     // Carrega o mapa Doom E1M1
-    // Coloque Doom_E1M1.obj e Doom_E1M1.mtl na pasta ../../data/
     // =========================================================
     ObjModel mapmodel("../../data/Map/Doom_E1M1.obj");
     ComputeNormals(&mapmodel);
+
+    // Carrega todas as texturas dos materiais
+    LoadMaterialTextures(&mapmodel, "../../data/Map/");
+
     BuildTrianglesAndAddToVirtualScene(&mapmodel);
 
     TextRendering_Init();
@@ -240,9 +388,14 @@ int main(int argc, char* argv[])
     glCullFace(GL_BACK);
     glFrontFace(GL_CCW);
 
+    // Ativa todas as texturas (uma vez, antes do loop)
+    glUseProgram(g_GpuProgramID);
+    BindAllTextures(g_GpuProgramID);
+    glUseProgram(0);
+
     while (!glfwWindowShouldClose(window))
     {
-        glClearColor(0.1f, 0.1f, 0.1f, 1.0f); // fundo escuro estilo Doom
+        glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         glUseProgram(g_GpuProgramID);
@@ -253,7 +406,6 @@ int main(int argc, char* argv[])
 
         if (!g_FreeCam)
         {
-            // Câmera look-at orbitando a origem
             float r = g_CameraDistance;
             float y = r * sin(g_CameraPhi);
             float z = r * cos(g_CameraPhi) * cos(g_CameraTheta);
@@ -265,7 +417,6 @@ int main(int argc, char* argv[])
         }
         else
         {
-            // FreeCam 1ª pessoa
             glm::vec4 front;
             front.x = cos(g_FreeCamPitch) * cos(g_FreeCamYaw);
             front.y = sin(g_FreeCamPitch);
@@ -282,7 +433,6 @@ int main(int argc, char* argv[])
             camera_up_vector
         );
 
-        // near/far ajustados para o tamanho do mapa escalado (0.01 * ~6000 = 60 unidades)
         float nearplane = -0.1f;
         float farplane  = -200.0f;
 
@@ -305,27 +455,29 @@ int main(int argc, char* argv[])
         glUniformMatrix4fv(g_projection_uniform, 1, GL_FALSE, glm::value_ptr(projection));
 
         // =========================================================
-        // Renderiza o mapa Doom
-        // Escala 0.01: Doom usa unidades grandes (~6000), reduz para ~60
+        // Renderiza o mapa Doom — um draw call por material
         // =========================================================
         glm::mat4 model = Matrix_Scale(0.01f, 0.01f, 0.01f);
         glUniformMatrix4fv(g_model_uniform, 1, GL_FALSE, glm::value_ptr(model));
-        glUniform1i(g_object_id_uniform, 0);
 
         for (auto& kv : g_VirtualScene)
         {
-            // Passa bbox do objeto atual para o shader
-            glm::vec3 bbox_min = kv.second.bbox_min;
-            glm::vec3 bbox_max = kv.second.bbox_max;
-            glUniform4f(g_bbox_min_uniform, bbox_min.x, bbox_min.y, bbox_min.z, 1.0f);
-            glUniform4f(g_bbox_max_uniform, bbox_max.x, bbox_max.y, bbox_max.z, 1.0f);
+            const SceneObject& obj = kv.second;
 
-            glBindVertexArray(kv.second.vertex_array_object_id);
+            // Passa bbox
+            glUniform4f(g_bbox_min_uniform, obj.bbox_min.x, obj.bbox_min.y, obj.bbox_min.z, 1.0f);
+            glUniform4f(g_bbox_max_uniform, obj.bbox_max.x, obj.bbox_max.y, obj.bbox_max.z, 1.0f);
+
+            // Passa índice de textura e flag
+            glUniform1i(g_texture_index_uniform, obj.material_id >= 0 ? obj.material_id : 0);
+            glUniform1i(g_has_texture_uniform,   obj.material_id >= 0 ? 1 : 0);
+
+            glBindVertexArray(obj.vertex_array_object_id);
             glDrawElements(
-                kv.second.rendering_mode,
-                kv.second.num_indices,
+                obj.rendering_mode,
+                (GLsizei)obj.num_indices,
                 GL_UNSIGNED_INT,
-                (void*)(kv.second.first_index * sizeof(GLuint))
+                (void*)(obj.first_index * sizeof(GLuint))
             );
             glBindVertexArray(0);
         }
@@ -368,48 +520,6 @@ int main(int argc, char* argv[])
     return 0;
 }
 
-void LoadTextureImage(const char* filename)
-{
-    printf("Carregando imagem \"%s\"... ", filename);
-
-    stbi_set_flip_vertically_on_load(true);
-    int width, height, channels;
-    unsigned char *data = stbi_load(filename, &width, &height, &channels, 3);
-
-    if (data == NULL)
-    {
-        fprintf(stderr, "ERROR: Cannot open image file \"%s\".\n", filename);
-        std::exit(EXIT_FAILURE);
-    }
-
-    printf("OK (%dx%d).\n", width, height);
-
-    GLuint texture_id;
-    GLuint sampler_id;
-    glGenTextures(1, &texture_id);
-    glGenSamplers(1, &sampler_id);
-
-    glSamplerParameteri(sampler_id, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glSamplerParameteri(sampler_id, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glSamplerParameteri(sampler_id, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    glSamplerParameteri(sampler_id, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-    glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0);
-    glPixelStorei(GL_UNPACK_SKIP_ROWS, 0);
-
-    GLuint textureunit = g_NumLoadedTextures;
-    glActiveTexture(GL_TEXTURE0 + textureunit);
-    glBindTexture(GL_TEXTURE_2D, texture_id);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glBindSampler(textureunit, sampler_id);
-
-    stbi_image_free(data);
-    g_NumLoadedTextures += 1;
-}
-
 void DrawVirtualObject(const char* object_name)
 {
     glBindVertexArray(g_VirtualScene[object_name].vertex_array_object_id);
@@ -421,7 +531,7 @@ void DrawVirtualObject(const char* object_name)
 
     glDrawElements(
         g_VirtualScene[object_name].rendering_mode,
-        g_VirtualScene[object_name].num_indices,
+        (GLsizei)g_VirtualScene[object_name].num_indices,
         GL_UNSIGNED_INT,
         (void*)(g_VirtualScene[object_name].first_index * sizeof(GLuint))
     );
@@ -439,12 +549,14 @@ void LoadShadersFromFiles()
 
     g_GpuProgramID = CreateGpuProgram(vertex_shader_id, fragment_shader_id);
 
-    g_model_uniform      = glGetUniformLocation(g_GpuProgramID, "model");
-    g_view_uniform       = glGetUniformLocation(g_GpuProgramID, "view");
-    g_projection_uniform = glGetUniformLocation(g_GpuProgramID, "projection");
-    g_object_id_uniform  = glGetUniformLocation(g_GpuProgramID, "object_id");
-    g_bbox_min_uniform   = glGetUniformLocation(g_GpuProgramID, "bbox_min");
-    g_bbox_max_uniform   = glGetUniformLocation(g_GpuProgramID, "bbox_max");
+    g_model_uniform         = glGetUniformLocation(g_GpuProgramID, "model");
+    g_view_uniform          = glGetUniformLocation(g_GpuProgramID, "view");
+    g_projection_uniform    = glGetUniformLocation(g_GpuProgramID, "projection");
+    g_object_id_uniform     = glGetUniformLocation(g_GpuProgramID, "object_id");
+    g_bbox_min_uniform      = glGetUniformLocation(g_GpuProgramID, "bbox_min");
+    g_bbox_max_uniform      = glGetUniformLocation(g_GpuProgramID, "bbox_max");
+    g_texture_index_uniform = glGetUniformLocation(g_GpuProgramID, "texture_index");
+    g_has_texture_uniform   = glGetUniformLocation(g_GpuProgramID, "has_texture");
 
     glUseProgram(g_GpuProgramID);
     glUseProgram(0);
@@ -558,8 +670,21 @@ void ComputeNormals(ObjModel* model)
     }
 }
 
+// =========================================================
+// BuildTrianglesAndAddToVirtualScene
+//
+// Estratégia: um VAO por shape. Dentro de cada shape,
+// as faces são agrupadas por material_id. Para cada grupo
+// (shape, material_id) criamos um SceneObject separado,
+// todos compartilhando o mesmo VAO mas com first_index e
+// num_indices diferentes.
+// =========================================================
 void BuildTrianglesAndAddToVirtualScene(ObjModel* model)
 {
+    // Vamos criar UM VAO global que contém todos os vértices
+    // e um EBO (índices) compartilhado. Cada SceneObject
+    // referencia um subintervalo do EBO.
+
     GLuint vertex_array_object_id;
     glGenVertexArrays(1, &vertex_array_object_id);
     glBindVertexArray(vertex_array_object_id);
@@ -571,69 +696,119 @@ void BuildTrianglesAndAddToVirtualScene(ObjModel* model)
 
     for (size_t shape = 0; shape < model->shapes.size(); ++shape)
     {
-        size_t first_index   = indices.size();
-        size_t num_triangles = model->shapes[shape].mesh.num_face_vertices.size();
+        const tinyobj::mesh_t& mesh = model->shapes[shape].mesh;
+        size_t num_triangles = mesh.num_face_vertices.size();
 
-        const float minval = std::numeric_limits<float>::min();
-        const float maxval = std::numeric_limits<float>::max();
-
-        glm::vec3 bbox_min = glm::vec3(maxval, maxval, maxval);
-        glm::vec3 bbox_max = glm::vec3(minval, minval, minval);
-
-        for (size_t triangle = 0; triangle < num_triangles; ++triangle)
+        // Agrupa triângulos por material
+        // material_id -> lista de índices de triângulo
+        std::map<int, std::vector<size_t>> mat_triangles;
+        for (size_t tri = 0; tri < num_triangles; ++tri)
         {
-            assert(model->shapes[shape].mesh.num_face_vertices[triangle] == 3);
-
-            for (size_t vertex = 0; vertex < 3; ++vertex)
-            {
-                tinyobj::index_t idx = model->shapes[shape].mesh.indices[3*triangle + vertex];
-                indices.push_back(first_index + 3*triangle + vertex);
-
-                const float vx = model->attrib.vertices[3*idx.vertex_index + 0];
-                const float vy = model->attrib.vertices[3*idx.vertex_index + 1];
-                const float vz = model->attrib.vertices[3*idx.vertex_index + 2];
-
-                model_coefficients.push_back(vx);
-                model_coefficients.push_back(vy);
-                model_coefficients.push_back(vz);
-                model_coefficients.push_back(1.0f);
-
-                bbox_min.x = std::min(bbox_min.x, vx);
-                bbox_min.y = std::min(bbox_min.y, vy);
-                bbox_min.z = std::min(bbox_min.z, vz);
-                bbox_max.x = std::max(bbox_max.x, vx);
-                bbox_max.y = std::max(bbox_max.y, vy);
-                bbox_max.z = std::max(bbox_max.z, vz);
-
-                if (idx.normal_index != -1)
-                {
-                    normal_coefficients.push_back(model->attrib.normals[3*idx.normal_index + 0]);
-                    normal_coefficients.push_back(model->attrib.normals[3*idx.normal_index + 1]);
-                    normal_coefficients.push_back(model->attrib.normals[3*idx.normal_index + 2]);
-                    normal_coefficients.push_back(0.0f);
-                }
-
-                if (idx.texcoord_index != -1)
-                {
-                    texture_coefficients.push_back(model->attrib.texcoords[2*idx.texcoord_index + 0]);
-                    texture_coefficients.push_back(model->attrib.texcoords[2*idx.texcoord_index + 1]);
-                }
-            }
+            int mat_id = mesh.material_ids.empty() ? -1 : mesh.material_ids[tri];
+            mat_triangles[mat_id].push_back(tri);
         }
 
-        size_t last_index = indices.size() - 1;
+        for (auto& mat_entry : mat_triangles)
+        {
+            int mat_id = mat_entry.first;
+            const std::vector<size_t>& tris = mat_entry.second;
 
-        SceneObject theobject;
-        theobject.name                   = model->shapes[shape].name;
-        theobject.first_index            = first_index;
-        theobject.num_indices            = last_index - first_index + 1;
-        theobject.rendering_mode         = GL_TRIANGLES;
-        theobject.vertex_array_object_id = vertex_array_object_id;
-        theobject.bbox_min               = bbox_min;
-        theobject.bbox_max               = bbox_max;
+            size_t first_index = indices.size();
 
-        g_VirtualScene[model->shapes[shape].name] = theobject;
+            const float minval = std::numeric_limits<float>::min();
+            const float maxval = std::numeric_limits<float>::max();
+            glm::vec3 bbox_min = glm::vec3(maxval, maxval, maxval);
+            glm::vec3 bbox_max = glm::vec3(minval, minval, minval);
+
+            for (size_t tri : tris)
+            {
+                assert(mesh.num_face_vertices[tri] == 3);
+
+                for (size_t vertex = 0; vertex < 3; ++vertex)
+                {
+                    tinyobj::index_t idx = mesh.indices[3*tri + vertex];
+
+                    // O índice aponta para a posição atual no array de vértices
+                    size_t current_vertex = model_coefficients.size() / 4;
+                    indices.push_back((GLuint)current_vertex);
+
+                    const float vx = model->attrib.vertices[3*idx.vertex_index + 0];
+                    const float vy = model->attrib.vertices[3*idx.vertex_index + 1];
+                    const float vz = model->attrib.vertices[3*idx.vertex_index + 2];
+
+                    model_coefficients.push_back(vx);
+                    model_coefficients.push_back(vy);
+                    model_coefficients.push_back(vz);
+                    model_coefficients.push_back(1.0f);
+
+                    bbox_min.x = std::min(bbox_min.x, vx);
+                    bbox_min.y = std::min(bbox_min.y, vy);
+                    bbox_min.z = std::min(bbox_min.z, vz);
+                    bbox_max.x = std::max(bbox_max.x, vx);
+                    bbox_max.y = std::max(bbox_max.y, vy);
+                    bbox_max.z = std::max(bbox_max.z, vz);
+
+                    if (idx.normal_index != -1)
+                    {
+                        normal_coefficients.push_back(model->attrib.normals[3*idx.normal_index + 0]);
+                        normal_coefficients.push_back(model->attrib.normals[3*idx.normal_index + 1]);
+                        normal_coefficients.push_back(model->attrib.normals[3*idx.normal_index + 2]);
+                        normal_coefficients.push_back(0.0f);
+                    }
+                    else
+                    {
+                        // Normal dummy para não desalinhar o VBO
+                        normal_coefficients.push_back(0.0f);
+                        normal_coefficients.push_back(1.0f);
+                        normal_coefficients.push_back(0.0f);
+                        normal_coefficients.push_back(0.0f);
+                    }
+
+                    if (idx.texcoord_index != -1)
+                    {
+                        texture_coefficients.push_back(model->attrib.texcoords[2*idx.texcoord_index + 0]);
+                        texture_coefficients.push_back(model->attrib.texcoords[2*idx.texcoord_index + 1]);
+                    }
+                    else
+                    {
+                        texture_coefficients.push_back(0.0f);
+                        texture_coefficients.push_back(0.0f);
+                    }
+                }
+            }
+
+            size_t num_indices = indices.size() - first_index;
+
+            // Determina o slot de textura para este material
+            int tex_slot = -1;
+            if (mat_id >= 0 && mat_id < (int)model->materials.size())
+            {
+                const std::string& matname = model->materials[mat_id].name;
+                auto it = g_MaterialTextureIndex.find(matname);
+                if (it != g_MaterialTextureIndex.end())
+                    tex_slot = it->second;
+            }
+
+            // Nome único: "shape_name#mat_id"
+            std::string obj_name = model->shapes[shape].name + "#" + std::to_string(mat_id);
+
+            SceneObject theobject;
+            theobject.name                   = obj_name;
+            theobject.first_index            = first_index;
+            theobject.num_indices            = num_indices;
+            theobject.rendering_mode         = GL_TRIANGLES;
+            theobject.vertex_array_object_id = vertex_array_object_id;
+            theobject.bbox_min               = bbox_min;
+            theobject.bbox_max               = bbox_max;
+            theobject.material_id            = tex_slot;
+
+            g_VirtualScene[obj_name] = theobject;
+        }
     }
+
+    // -------------------------------------------------------
+    // Envia VBOs para a GPU
+    // -------------------------------------------------------
 
     // VBO posições
     GLuint VBO_model_coefficients_id;
@@ -646,7 +821,6 @@ void BuildTrianglesAndAddToVirtualScene(ObjModel* model)
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     // VBO normais
-    if (!normal_coefficients.empty())
     {
         GLuint VBO_normal_coefficients_id;
         glGenBuffers(1, &VBO_normal_coefficients_id);
@@ -659,7 +833,6 @@ void BuildTrianglesAndAddToVirtualScene(ObjModel* model)
     }
 
     // VBO coordenadas de textura
-    if (!texture_coefficients.empty())
     {
         GLuint VBO_texture_coefficients_id;
         glGenBuffers(1, &VBO_texture_coefficients_id);
@@ -679,6 +852,9 @@ void BuildTrianglesAndAddToVirtualScene(ObjModel* model)
     glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, indices.size() * sizeof(GLuint), indices.data());
 
     glBindVertexArray(0);
+
+    printf("Cena construída: %zu objetos, %zu vértices, %zu índices.\n",
+           g_VirtualScene.size(), model_coefficients.size()/4, indices.size());
 }
 
 GLuint LoadShader_Vertex(const char* filename)
@@ -842,7 +1018,7 @@ void CursorPosCallback(GLFWwindow* window, double xpos, double ypos)
 
 void ScrollCallback(GLFWwindow* window, double xoffset, double yoffset)
 {
-    g_CameraDistance -= 0.5f * yoffset; // passo maior para o mapa grande
+    g_CameraDistance -= 0.5f * yoffset;
     const float verysmallnumber = std::numeric_limits<float>::epsilon();
     if (g_CameraDistance < verysmallnumber)
         g_CameraDistance = verysmallnumber;
@@ -868,7 +1044,6 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mod)
         g_FreeCam = !g_FreeCam;
         if (g_FreeCam)
         {
-            // Inicia a freecam na posição atual da câmera look-at
             float r = g_CameraDistance;
             float y = r * sin(g_CameraPhi);
             float z = r * cos(g_CameraPhi) * cos(g_CameraTheta);
@@ -891,6 +1066,10 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mod)
     if (key == GLFW_KEY_R && action == GLFW_PRESS)
     {
         LoadShadersFromFiles();
+        // Re-bind texturas após recarregar shaders
+        glUseProgram(g_GpuProgramID);
+        BindAllTextures(g_GpuProgramID);
+        glUseProgram(0);
         fprintf(stdout, "Shaders recarregados!\n");
         fflush(stdout);
     }
@@ -939,8 +1118,6 @@ void TextRendering_ShowFramesPerSecond(GLFWwindow* window)
     TextRendering_PrintString(window, buffer, 1.0f - (numchars + 1)*charwidth, 1.0f - lineheight, 1.0f);
 }
 
-// Stubs para funções removidas que ainda são referenciadas pelo textrendering.cpp
 void TextRendering_ShowModelViewProjection(GLFWwindow*, glm::mat4, glm::mat4, glm::mat4, glm::vec4) {}
 void TextRendering_ShowEulerAngles(GLFWwindow*) {}
-
 void PrintObjModelInfo(ObjModel* model) {}
