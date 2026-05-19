@@ -105,15 +105,8 @@ void TextRendering_Init();
 float TextRendering_LineHeight(GLFWwindow* window);
 float TextRendering_CharWidth(GLFWwindow* window);
 void TextRendering_PrintString(GLFWwindow* window, const std::string &str, float x, float y, float scale = 1.0f);
-void TextRendering_PrintMatrix(GLFWwindow* window, glm::mat4 M, float x, float y, float scale = 1.0f);
-void TextRendering_PrintVector(GLFWwindow* window, glm::vec4 v, float x, float y, float scale = 1.0f);
-void TextRendering_PrintMatrixVectorProduct(GLFWwindow* window, glm::mat4 M, glm::vec4 v, float x, float y, float scale = 1.0f);
-void TextRendering_PrintMatrixVectorProductMoreDigits(GLFWwindow* window, glm::mat4 M, glm::vec4 v, float x, float y, float scale = 1.0f);
-void TextRendering_PrintMatrixVectorProductDivW(GLFWwindow* window, glm::mat4 M, glm::vec4 v, float x, float y, float scale = 1.0f);
 
-void TextRendering_ShowModelViewProjection(GLFWwindow* window, glm::mat4 projection, glm::mat4 view, glm::mat4 model, glm::vec4 p_model);
 void TextRendering_ShowEulerAngles(GLFWwindow* window);
-void TextRendering_ShowProjection(GLFWwindow* window);
 void TextRendering_ShowFramesPerSecond(GLFWwindow* window);
 
 void FramebufferSizeCallback(GLFWwindow* window, int width, int height);
@@ -150,12 +143,9 @@ std::vector<GLuint> g_TextureSlots;
 
 // Número máximo de texturas suportado pelo shader
 #define MAX_TEXTURES 64
+#define PI 3.141592f
 
 float g_ScreenRatio = 1.0f;
-
-float g_AngleX = 0.0f;
-float g_AngleY = 0.0f;
-float g_AngleZ = 0.0f;
 
 bool g_LeftMouseButtonPressed = false;
 bool g_RightMouseButtonPressed = false;
@@ -168,16 +158,9 @@ float g_CameraDistance = 30.0f;
 bool g_FreeCam = false;
 
 glm::vec4 g_FreeCamPosition = glm::vec4(0.0f, 1.0f, 3.5f, 1.0f);
-float g_FreeCamYaw = -3.141592f/2.0f;
+float g_FreeCamYaw = -PI/2.0f;
 float g_FreeCamPitch = 0.0f;
 
-float g_ForearmAngleZ = 0.0f;
-float g_ForearmAngleX = 0.0f;
-
-float g_TorsoPositionX = 0.0f;
-float g_TorsoPositionY = 0.0f;
-
-bool g_UsePerspectiveProjection = true;
 bool g_ShowInfoText = true;
 
 GLuint g_GpuProgramID = 0;
@@ -436,20 +419,8 @@ int main(int argc, char* argv[])
         float nearplane = -0.1f;
         float farplane  = -200.0f;
 
-        glm::mat4 projection;
-        if (g_UsePerspectiveProjection)
-        {
-            float field_of_view = 3.141592f / 3.0f;
-            projection = Matrix_Perspective(field_of_view, g_ScreenRatio, nearplane, farplane);
-        }
-        else
-        {
-            float t = 1.5f * g_CameraDistance / 2.5f;
-            float b = -t;
-            float r = t * g_ScreenRatio;
-            float l = -r;
-            projection = Matrix_Orthographic(l, r, b, t, nearplane, farplane);
-        }
+        float field_of_view = PI / 3.0f;
+        glm::mat4 projection = Matrix_Perspective(field_of_view, g_ScreenRatio, nearplane, farplane);
 
         glUniformMatrix4fv(g_view_uniform,       1, GL_FALSE, glm::value_ptr(view));
         glUniformMatrix4fv(g_projection_uniform, 1, GL_FALSE, glm::value_ptr(projection));
@@ -481,8 +452,6 @@ int main(int argc, char* argv[])
             );
             glBindVertexArray(0);
         }
-
-        TextRendering_ShowProjection(window);
         TextRendering_ShowFramesPerSecond(window);
 
         // =========================================================
@@ -990,7 +959,7 @@ void CursorPosCallback(GLFWwindow* window, double xpos, double ypos)
         g_CameraTheta -= 0.01f * dx;
         g_CameraPhi   += 0.01f * dy;
 
-        float phimax =  3.141592f / 2;
+        float phimax =  PI / 2;
         float phimin = -phimax;
         if (g_CameraPhi > phimax) g_CameraPhi = phimax;
         if (g_CameraPhi < phimin) g_CameraPhi = phimin;
@@ -1007,7 +976,7 @@ void CursorPosCallback(GLFWwindow* window, double xpos, double ypos)
         g_FreeCamYaw   += 0.003f * dx;
         g_FreeCamPitch -= 0.003f * dy;
 
-        float limit = 3.141592f / 2.0f - 0.01f;
+        float limit = PI / 2.0f - 0.01f;
         if (g_FreeCamPitch >  limit) g_FreeCamPitch =  limit;
         if (g_FreeCamPitch < -limit) g_FreeCamPitch = -limit;
 
@@ -1033,12 +1002,6 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mod)
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
         glfwSetWindowShouldClose(window, GL_TRUE);
 
-    if (key == GLFW_KEY_P && action == GLFW_PRESS)
-        g_UsePerspectiveProjection = true;
-
-    if (key == GLFW_KEY_O && action == GLFW_PRESS)
-        g_UsePerspectiveProjection = false;
-
     if (key == GLFW_KEY_SEMICOLON && action == GLFW_PRESS)
     {
         g_FreeCam = !g_FreeCam;
@@ -1049,7 +1012,7 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mod)
             float z = r * cos(g_CameraPhi) * cos(g_CameraTheta);
             float x = r * cos(g_CameraPhi) * sin(g_CameraTheta);
             g_FreeCamPosition = glm::vec4(x, y, z, 1.0f);
-            g_FreeCamYaw   = g_CameraTheta + 3.141592f;
+            g_FreeCamYaw   = g_CameraTheta + PI;
             g_FreeCamPitch = -g_CameraPhi;
             glfwGetCursorPos(window, &g_LastCursorPosX, &g_LastCursorPosY);
             glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
@@ -1078,19 +1041,6 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mod)
 void ErrorCallback(int error, const char* description)
 {
     fprintf(stderr, "ERROR: GLFW: %s\n", description);
-}
-
-void TextRendering_ShowProjection(GLFWwindow* window)
-{
-    if (!g_ShowInfoText) return;
-
-    float lineheight = TextRendering_LineHeight(window);
-    float charwidth  = TextRendering_CharWidth(window);
-
-    if (g_UsePerspectiveProjection)
-        TextRendering_PrintString(window, "Perspective",  1.0f - 13*charwidth, -1.0f + 2*lineheight/10, 1.0f);
-    else
-        TextRendering_PrintString(window, "Orthographic", 1.0f - 13*charwidth, -1.0f + 2*lineheight/10, 1.0f);
 }
 
 void TextRendering_ShowFramesPerSecond(GLFWwindow* window)
