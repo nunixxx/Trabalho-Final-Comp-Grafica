@@ -87,26 +87,19 @@ struct ObjModel
     }
 };
 
-void PushMatrix(glm::mat4 M);
-void PopMatrix(glm::mat4& M);
-
 void BuildTrianglesAndAddToVirtualScene(ObjModel*);
 void ComputeNormals(ObjModel* model);
 void LoadShadersFromFiles();
 GLuint LoadTextureImage(const char* filename);
-void DrawVirtualObject(const char* object_name);
 GLuint LoadShader_Vertex(const char* filename);
 GLuint LoadShader_Fragment(const char* filename);
 void LoadShader(const char* filename, GLuint shader_id);
 GLuint CreateGpuProgram(GLuint vertex_shader_id, GLuint fragment_shader_id);
-void PrintObjModelInfo(ObjModel*);
 
 void TextRendering_Init();
 float TextRendering_LineHeight(GLFWwindow* window);
 float TextRendering_CharWidth(GLFWwindow* window);
 void TextRendering_PrintString(GLFWwindow* window, const std::string &str, float x, float y, float scale = 1.0f);
-
-void TextRendering_ShowEulerAngles(GLFWwindow* window);
 void TextRendering_ShowFramesPerSecond(GLFWwindow* window);
 
 void FramebufferSizeCallback(GLFWwindow* window, int width, int height);
@@ -129,7 +122,6 @@ struct SceneObject
 };
 
 std::map<std::string, SceneObject> g_VirtualScene;
-std::stack<glm::mat4>  g_MatrixStack;
 
 // =========================================================
 // Sistema de texturas
@@ -172,8 +164,6 @@ GLint g_bbox_min_uniform;
 GLint g_bbox_max_uniform;
 GLint g_texture_index_uniform;
 GLint g_has_texture_uniform;
-
-GLuint g_NumLoadedTextures = 0;
 
 // =========================================================
 // Carrega uma textura PNG e retorna o GLuint, usando cache
@@ -489,25 +479,6 @@ int main(int argc, char* argv[])
     return 0;
 }
 
-void DrawVirtualObject(const char* object_name)
-{
-    glBindVertexArray(g_VirtualScene[object_name].vertex_array_object_id);
-
-    glm::vec3 bbox_min = g_VirtualScene[object_name].bbox_min;
-    glm::vec3 bbox_max = g_VirtualScene[object_name].bbox_max;
-    glUniform4f(g_bbox_min_uniform, bbox_min.x, bbox_min.y, bbox_min.z, 1.0f);
-    glUniform4f(g_bbox_max_uniform, bbox_max.x, bbox_max.y, bbox_max.z, 1.0f);
-
-    glDrawElements(
-        g_VirtualScene[object_name].rendering_mode,
-        (GLsizei)g_VirtualScene[object_name].num_indices,
-        GL_UNSIGNED_INT,
-        (void*)(g_VirtualScene[object_name].first_index * sizeof(GLuint))
-    );
-
-    glBindVertexArray(0);
-}
-
 void LoadShadersFromFiles()
 {
     GLuint vertex_shader_id   = LoadShader_Vertex("../../src/shader_vertex.glsl");
@@ -529,22 +500,6 @@ void LoadShadersFromFiles()
 
     glUseProgram(g_GpuProgramID);
     glUseProgram(0);
-}
-
-void PushMatrix(glm::mat4 M)
-{
-    g_MatrixStack.push(M);
-}
-
-void PopMatrix(glm::mat4& M)
-{
-    if (g_MatrixStack.empty())
-        M = Matrix_Identity();
-    else
-    {
-        M = g_MatrixStack.top();
-        g_MatrixStack.pop();
-    }
 }
 
 void ComputeNormals(ObjModel* model)
@@ -1068,6 +1023,3 @@ void TextRendering_ShowFramesPerSecond(GLFWwindow* window)
     TextRendering_PrintString(window, buffer, 1.0f - (numchars + 1)*charwidth, 1.0f - lineheight, 1.0f);
 }
 
-void TextRendering_ShowModelViewProjection(GLFWwindow*, glm::mat4, glm::mat4, glm::mat4, glm::vec4) {}
-void TextRendering_ShowEulerAngles(GLFWwindow*) {}
-void PrintObjModelInfo(ObjModel* model) {}
