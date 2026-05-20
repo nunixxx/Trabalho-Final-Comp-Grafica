@@ -96,6 +96,8 @@ GLuint LoadShader_Fragment(const char* filename);
 void LoadShader(const char* filename, GLuint shader_id);
 GLuint CreateGpuProgram(GLuint vertex_shader_id, GLuint fragment_shader_id);
 
+void RenderSoldier(glm::vec4 position, float yaw, float scale = 0.05f);void RenderMap(glm::mat4 model);
+
 void TextRendering_Init();
 float TextRendering_LineHeight(GLFWwindow* window);
 float TextRendering_CharWidth(GLFWwindow* window);
@@ -145,13 +147,23 @@ bool g_MiddleMouseButtonPressed = false;
 
 float g_CameraTheta = 0.0f;
 float g_CameraPhi = 0.4f;
-float g_CameraDistance = 30.0f;
+float g_CameraDistance = 3.0f;
 
 bool g_FreeCam = false;
 
+glm::vec4 g_PlayerSpawnPosition = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+float     g_PlayerSpawnYaw      = 0.0f;
+
 glm::vec4 g_FreeCamPosition = glm::vec4(0.0f, 1.0f, 3.5f, 1.0f);
+glm::vec4 g_LookAtTarget = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+
 float g_FreeCamYaw = -PI/2.0f;
 float g_FreeCamPitch = 0.0f;
+
+// junto das outras globais de câmera
+glm::vec4 g_FreeCamPositionBackup = glm::vec4(0.0f, 1.0f, 3.5f, 1.0f);
+float     g_FreeCamYawBackup      = -PI/2.0f;
+float     g_FreeCamPitchBackup    = 0.0f;
 
 bool g_ShowInfoText = true;
 
@@ -344,16 +356,23 @@ int main(int argc, char* argv[])
     LoadShadersFromFiles();
 
     // =========================================================
+    // Carrega o jogador Doom E1M1
+    // =========================================================
+    ObjModel soldierModel("../../data/Soldier/model.obj");
+    ComputeNormals(&soldierModel);
+    LoadMaterialTextures(&soldierModel, "../../data/Soldier/");
+    BuildTrianglesAndAddToVirtualScene(&soldierModel);
+
+
+    // =========================================================
     // Carrega o mapa Doom E1M1
     // =========================================================
     ObjModel mapmodel("../../data/Map/Doom_E1M1.obj");
     ComputeNormals(&mapmodel);
-
-    // Carrega todas as texturas dos materiais
-    LoadMaterialTextures(&mapmodel, "../../data/Map/");
-
+    //LoadMaterialTextures(&mapmodel, "../../data/Map/");
     BuildTrianglesAndAddToVirtualScene(&mapmodel);
 
+    
     TextRendering_Init();
 
     glEnable(GL_DEPTH_TEST);
@@ -384,8 +403,8 @@ int main(int argc, char* argv[])
             float z = r * cos(g_CameraPhi) * cos(g_CameraTheta);
             float x = r * cos(g_CameraPhi) * sin(g_CameraTheta);
 
-            camera_position_c  = glm::vec4(x, y, z, 1.0f);
-            glm::vec4 lookat   = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+            glm::vec4 lookat = g_LookAtTarget;
+            camera_position_c  = lookat + glm::vec4(x, y, z, 0.0f);
             camera_view_vector = lookat - camera_position_c;
         }
         else
@@ -418,30 +437,10 @@ int main(int argc, char* argv[])
         // =========================================================
         // Renderiza o mapa Doom — um draw call por material
         // =========================================================
-        glm::mat4 model = Matrix_Scale(0.01f, 0.01f, 0.01f);
-        glUniformMatrix4fv(g_model_uniform, 1, GL_FALSE, glm::value_ptr(model));
+        glm::mat4 mapModel = Matrix_Scale(0.01f, 0.01f, 0.01f);
+        RenderMap(mapModel);
 
-        for (auto& kv : g_VirtualScene)
-        {
-            const SceneObject& obj = kv.second;
-
-            // Passa bbox
-            glUniform4f(g_bbox_min_uniform, obj.bbox_min.x, obj.bbox_min.y, obj.bbox_min.z, 1.0f);
-            glUniform4f(g_bbox_max_uniform, obj.bbox_max.x, obj.bbox_max.y, obj.bbox_max.z, 1.0f);
-
-            // Passa índice de textura e flag
-            glUniform1i(g_texture_index_uniform, obj.material_id >= 0 ? obj.material_id : 0);
-            glUniform1i(g_has_texture_uniform,   obj.material_id >= 0 ? 1 : 0);
-
-            glBindVertexArray(obj.vertex_array_object_id);
-            glDrawElements(
-                obj.rendering_mode,
-                (GLsizei)obj.num_indices,
-                GL_UNSIGNED_INT,
-                (void*)(obj.first_index * sizeof(GLuint))
-            );
-            glBindVertexArray(0);
-        }
+        if (!g_FreeCam) RenderSoldier(g_PlayerSpawnPosition, g_PlayerSpawnYaw);
         TextRendering_ShowFramesPerSecond(window);
 
         // =========================================================
@@ -639,7 +638,7 @@ void BuildTrianglesAndAddToVirtualScene(ObjModel* model)
 
             size_t first_index = indices.size();
 
-            const float minval = std::numeric_limits<float>::min();
+            const float minval = std::numeric_limits<float>::lowest();
             const float maxval = std::numeric_limits<float>::max();
             glm::vec3 bbox_min = glm::vec3(maxval, maxval, maxval);
             glm::vec3 bbox_max = glm::vec3(minval, minval, minval);
@@ -779,6 +778,69 @@ void BuildTrianglesAndAddToVirtualScene(ObjModel* model)
 
     printf("Cena construída: %zu objetos, %zu vértices, %zu índices.\n",
            g_VirtualScene.size(), model_coefficients.size()/4, indices.size());
+}
+
+// =========================================================
+// RenderMap: renderiza o mapa
+// =========================================================
+void RenderMap(glm::mat4 model)
+{
+    glUniformMatrix4fv(g_model_uniform, 1, GL_FALSE, glm::value_ptr(model));
+
+    for (auto& kv : g_VirtualScene)
+    {
+        if (kv.first.find("Joint_") != std::string::npos)
+            continue; // pula objetos do soldado
+
+        const SceneObject& obj = kv.second;
+        glUniform4f(g_bbox_min_uniform,
+            obj.bbox_min.x, obj.bbox_min.y, obj.bbox_min.z, 1.0f);
+        glUniform4f(g_bbox_max_uniform,
+            obj.bbox_max.x, obj.bbox_max.y, obj.bbox_max.z, 1.0f);
+        glUniform1i(g_texture_index_uniform,
+            obj.material_id >= 0 ? obj.material_id : 0);
+        glUniform1i(g_has_texture_uniform,
+            obj.material_id >= 0 ? 1 : 0);
+
+        glBindVertexArray(obj.vertex_array_object_id);
+        glDrawElements(obj.rendering_mode, (GLsizei)obj.num_indices,
+            GL_UNSIGNED_INT, (void*)(obj.first_index * sizeof(GLuint)));
+        glBindVertexArray(0);
+    }
+}
+
+// =========================================================
+// RenderSoldier: renderiza o modelo do soldado
+// =========================================================
+void RenderSoldier(glm::vec4 position, float yaw, float scale)
+{
+    glm::mat4 model =
+        Matrix_Translate(position.x, position.y, position.z)
+      * Matrix_Rotate_Y(yaw + PI)
+      * Matrix_Scale(scale, scale, scale);
+
+    glUniformMatrix4fv(g_model_uniform, 1, GL_FALSE, glm::value_ptr(model));
+
+    for (auto& kv : g_VirtualScene)
+    {
+        if (kv.first.find("Joint_") == std::string::npos)
+            continue;
+
+        const SceneObject& obj = kv.second;
+        glUniform4f(g_bbox_min_uniform,
+            obj.bbox_min.x, obj.bbox_min.y, obj.bbox_min.z, 1.0f);
+        glUniform4f(g_bbox_max_uniform,
+            obj.bbox_max.x, obj.bbox_max.y, obj.bbox_max.z, 1.0f);
+        glUniform1i(g_texture_index_uniform,
+            obj.material_id >= 0 ? obj.material_id : 0);
+        glUniform1i(g_has_texture_uniform,
+            obj.material_id >= 0 ? 1 : 0);
+
+        glBindVertexArray(obj.vertex_array_object_id);
+        glDrawElements(obj.rendering_mode, (GLsizei)obj.num_indices,
+            GL_UNSIGNED_INT, (void*)(obj.first_index * sizeof(GLuint)));
+        glBindVertexArray(0);
+    }
 }
 
 GLuint LoadShader_Vertex(const char* filename)
@@ -962,18 +1024,47 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mod)
         g_FreeCam = !g_FreeCam;
         if (g_FreeCam)
         {
-            float r = g_CameraDistance;
-            float y = r * sin(g_CameraPhi);
-            float z = r * cos(g_CameraPhi) * cos(g_CameraTheta);
-            float x = r * cos(g_CameraPhi) * sin(g_CameraTheta);
-            g_FreeCamPosition = glm::vec4(x, y, z, 1.0f);
-            g_FreeCamYaw   = g_CameraTheta + PI;
-            g_FreeCamPitch = -g_CameraPhi;
+            // LookAt → FreeCam: restaura o estado salvo anteriormente
+            g_FreeCamPosition = g_FreeCamPositionBackup;
+            g_FreeCamYaw      = g_FreeCamYawBackup;
+            g_FreeCamPitch    = g_FreeCamPitchBackup;
+
             glfwGetCursorPos(window, &g_LastCursorPosX, &g_LastCursorPosY);
             glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
         }
         else
         {
+            // FreeCam → LookAt: salva o estado atual da FreeCam
+            g_FreeCamPositionBackup = g_FreeCamPosition;
+            g_FreeCamYawBackup      = g_FreeCamYaw;
+            g_FreeCamPitchBackup    = g_FreeCamPitch;
+
+            // Spawn do personagem na posição atual da FreeCam
+            g_PlayerSpawnPosition = g_FreeCamPosition;
+            g_PlayerSpawnYaw      = g_FreeCamYaw;
+
+            // Herda posição da FreeCam como novo alvo da LookAt
+            glm::vec4 front;
+            front.x = cos(g_FreeCamPitch) * cos(g_FreeCamYaw);
+            front.y = sin(g_FreeCamPitch);
+            front.z = cos(g_FreeCamPitch) * sin(g_FreeCamYaw);
+            front.w = 0.0f;
+            front   = normalize(front);
+
+            // O ponto que a câmera estava "olhando" vira o novo lookat_target
+            float orbit_dist = 1.0f;
+            glm::vec4 lookat_target = g_FreeCamPosition + front * orbit_dist;
+
+            // Recalcula theta/phi/distance
+            glm::vec4 diff = g_FreeCamPosition - lookat_target;
+            g_LookAtTarget = lookat_target;
+            g_CameraDistance = norm(diff);
+
+            if (g_CameraDistance < 0.01f) g_CameraDistance = orbit_dist;
+
+            g_CameraPhi   = asin(diff.y / g_CameraDistance);
+            g_CameraTheta = atan2(diff.x, diff.z);
+
             glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
         }
     }
