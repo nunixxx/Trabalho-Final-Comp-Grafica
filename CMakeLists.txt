@@ -12,6 +12,7 @@ set(SOURCES
   src/tiny_obj_loader.cpp
   src/stb_image.cpp
   src/glad.c
+  src/modelRendering/model_rendering.cpp
 )
 
 cmake_minimum_required(VERSION 3.10)
