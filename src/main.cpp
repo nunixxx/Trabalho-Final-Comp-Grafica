@@ -76,9 +76,24 @@ std::map<std::string, GLuint> g_LoadedTextures;
 // Lista ordenada de GLuints para bind no shader (slot 0..N)
 std::vector<GLuint> g_TextureSlots;
 
+struct PlayerInfo
+{
+    glm::vec4 position;
+    float yaw;
+};
+
+struct FreeCamInfo
+{
+    glm::vec4 position;
+    float yaw;
+    float pitch;
+};
+
 // Número máximo de texturas suportado pelo shader
 #define MAX_TEXTURES 64
 #define PI 3.141592f
+#define FREECAM TRUE
+#define LOOKAT FALSE
 
 float g_ScreenRatio = 1.0f;
 
@@ -88,23 +103,17 @@ bool g_MiddleMouseButtonPressed = false;
 
 float g_CameraTheta = 0.0f;
 float g_CameraPhi = 0.4f;
-float g_CameraDistance = 3.0f;
+float g_CameraDistance = 5.0f;
 
-bool g_FreeCam = false;
+bool g_CamMode = LOOKAT;
 
-glm::vec4 g_PlayerSpawnPosition = glm::vec4(-38.08f, 0.74f, -161.84f, 1.0f);
-float     g_PlayerSpawnYaw      = 0.0f;
+PlayerInfo g_Player = { glm::vec4(-38.08f, 0.74f, -161.84f, 1.0f), -1.57f };
 
-glm::vec4 g_FreeCamPosition = glm::vec4(-38.08f, 0.74f, -161.84f, 1.0f);
-glm::vec4 g_LookAtTarget = glm::vec4(-38.08f, 0.74f, -161.84f, 1.0f);
+FreeCamInfo g_FreeCam = { g_Player.position, g_Player.yaw, 0.0f };
 
-float g_FreeCamYaw = -PI/2.0f;
-float g_FreeCamPitch = 0.0f;
+FreeCamInfo g_FreeCamBackup = g_FreeCam;
 
-// junto das outras globais de câmera
-glm::vec4 g_FreeCamPositionBackup = glm::vec4(-38.08f, 0.74f, -161.84f, 1.0f);
-float     g_FreeCamYawBackup      = -PI/2.0f;
-float     g_FreeCamPitchBackup    = 0.0f;
+glm::vec4 g_LookAtTarget = g_Player.position + glm::vec4(0.0f, 0.8f, 0.0f, 0.0f);
 
 bool g_ShowInfoText = true;
 
@@ -348,12 +357,12 @@ int main(int argc, char* argv[])
         glm::vec4 camera_view_vector;
         glm::vec4 camera_up_vector = glm::vec4(0.0f, 1.0f, 0.0f, 0.0f);
 
-        if (!g_FreeCam)
+        if (g_CamMode == LOOKAT)
         {
             float r = g_CameraDistance;
             float y = r * sin(g_CameraPhi);
 
-            float behindAngle = g_PlayerSpawnYaw + PI;  // direção de trás do soldado
+            float behindAngle = g_Player.yaw + PI;  // direção de trás do soldado
             float z = r * cos(g_CameraPhi) * cos(behindAngle);
             float x = r * cos(g_CameraPhi) * sin(behindAngle);
 
@@ -364,12 +373,12 @@ int main(int argc, char* argv[])
         else
         {
             glm::vec4 front;
-            front.x = cos(g_FreeCamPitch) * cos(g_FreeCamYaw);
-            front.y = sin(g_FreeCamPitch);
-            front.z = cos(g_FreeCamPitch) * sin(g_FreeCamYaw);
+            front.x = cos(g_FreeCam.pitch) * cos(g_FreeCam.yaw);
+            front.y = sin(g_FreeCam.pitch);
+            front.z = cos(g_FreeCam.pitch) * sin(g_FreeCam.yaw);
             front.w = 0.0f;
 
-            camera_position_c  = g_FreeCamPosition;
+            camera_position_c  = g_FreeCam.position;
             camera_view_vector = front;
         }
 
@@ -397,11 +406,11 @@ int main(int argc, char* argv[])
         // =========================================================
         // Renderiza o soldado (se não estiver na câmera livre)
         // =========================================================
-        if (!g_FreeCam) 
+        if (g_CamMode == LOOKAT) 
         {
             glm::mat4 soldierModelMatrix =
-                Matrix_Translate(g_PlayerSpawnPosition.x, g_PlayerSpawnPosition.y, g_PlayerSpawnPosition.z)
-                * Matrix_Rotate_Y(g_PlayerSpawnYaw)
+                Matrix_Translate(g_Player.position.x, g_Player.position.y, g_Player.position.z)
+                * Matrix_Rotate_Y(g_Player.yaw)
                 * Matrix_Scale(0.1f, 0.1f, 0.1f);
 
             DrawModel("soldier", soldierModelMatrix); // <-- Desenha o soldado usando a mesma função
@@ -410,14 +419,14 @@ int main(int argc, char* argv[])
         // =========================================================
         // Movimentação FreeCam
         // =========================================================
-        if (g_FreeCam)
+        if (g_CamMode == FREECAM)
         {
             float cameraSpeed = 0.1f;
 
             glm::vec4 front;
-            front.x = cos(g_FreeCamPitch) * cos(g_FreeCamYaw);
-            front.y = sin(g_FreeCamPitch);
-            front.z = cos(g_FreeCamPitch) * sin(g_FreeCamYaw);
+            front.x = cos(g_FreeCam.pitch) * cos(g_FreeCam.yaw);
+            front.y = sin(g_FreeCam.pitch);
+            front.z = cos(g_FreeCam.pitch) * sin(g_FreeCam.yaw);
             front.w = 0.0f;
             front = normalize(front);
 
@@ -425,13 +434,13 @@ int main(int argc, char* argv[])
             right = normalize(right);
 
             if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-                g_FreeCamPosition += front * cameraSpeed;
+                g_FreeCam.position += front * cameraSpeed;
             if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-                g_FreeCamPosition -= front * cameraSpeed;
+                g_FreeCam.position -= front * cameraSpeed;
             if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-                g_FreeCamPosition -= right * cameraSpeed;
+                g_FreeCam.position -= right * cameraSpeed;
             if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-                g_FreeCamPosition += right * cameraSpeed;
+                g_FreeCam.position += right * cameraSpeed;
         }
 
         glfwSwapBuffers(window);
@@ -869,13 +878,13 @@ void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
 
 void CursorPosCallback(GLFWwindow* window, double xpos, double ypos)
 {
-    if (g_LeftMouseButtonPressed && !g_FreeCam)
+    if (g_LeftMouseButtonPressed && g_CamMode == LOOKAT)
     {
         float dx = xpos - g_LastCursorPosX;
         float dy = ypos - g_LastCursorPosY;
 
         //g_CameraTheta -= 0.01f * dx;
-        g_PlayerSpawnYaw -= 0.01f * dx;   // mouse gira o soldado
+        g_Player.yaw -= 0.01f * dx;   // mouse gira o soldado
         g_CameraPhi   += 0.01f * dy;
 
         float phimax =  PI / 2;
@@ -887,17 +896,17 @@ void CursorPosCallback(GLFWwindow* window, double xpos, double ypos)
         g_LastCursorPosY = ypos;
     }
 
-    if (g_FreeCam)
+    if (g_CamMode == FREECAM)
     {
         float dx = xpos - g_LastCursorPosX;
         float dy = ypos - g_LastCursorPosY;
 
-        g_FreeCamYaw   += 0.003f * dx;
-        g_FreeCamPitch -= 0.003f * dy;
+        g_FreeCam.yaw += 0.003f * dx;
+        g_FreeCam.pitch -= 0.003f * dy;
 
         float limit = PI / 2.0f - 0.01f;
-        if (g_FreeCamPitch >  limit) g_FreeCamPitch =  limit;
-        if (g_FreeCamPitch < -limit) g_FreeCamPitch = -limit;
+        if (g_FreeCam.pitch >  limit) g_FreeCam.pitch =  limit;
+        if (g_FreeCam.pitch < -limit) g_FreeCam.pitch = -limit;
 
         g_LastCursorPosX = xpos;
         g_LastCursorPosY = ypos;
@@ -923,13 +932,13 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mod)
 
     if (key == GLFW_KEY_SEMICOLON && action == GLFW_PRESS)
     {
-        g_FreeCam = !g_FreeCam;
-        if (g_FreeCam)
+        g_CamMode = !g_CamMode;
+        if (g_CamMode == FREECAM)
         {
             // LookAt → FreeCam: restaura o estado salvo anteriormente
-            g_FreeCamPosition = g_FreeCamPositionBackup;
-            g_FreeCamYaw      = g_FreeCamYawBackup;
-            g_FreeCamPitch    = g_FreeCamPitchBackup;
+            g_FreeCam.position = g_FreeCamBackup.position;
+            g_FreeCam.yaw      = g_FreeCamBackup.yaw;
+            g_FreeCam.pitch    = g_FreeCamBackup.pitch;
 
             glfwGetCursorPos(window, &g_LastCursorPosX, &g_LastCursorPosY);
             glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
@@ -937,35 +946,35 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mod)
         else
         {
             // FreeCam → LookAt: salva o estado atual da FreeCam
-            g_FreeCamPositionBackup = g_FreeCamPosition;
-            g_FreeCamYawBackup      = g_FreeCamYaw;
-            g_FreeCamPitchBackup    = g_FreeCamPitch;
+            g_FreeCamBackup.position = g_FreeCam.position;
+            g_FreeCamBackup.yaw      = g_FreeCam.yaw;
+            g_FreeCamBackup.pitch    = g_FreeCam.pitch;
 
             // Spawn do personagem na posição atual da FreeCam
-            g_PlayerSpawnPosition = g_FreeCamPosition;
-            g_PlayerSpawnYaw      = g_FreeCamYaw;
+            g_Player.position = g_FreeCam.position;
+            g_Player.yaw      = g_FreeCam.yaw;
 
             printf("\n[POSICAO ATUAL]\n");
             printf("g_PlayerSpawnPosition = glm::vec4(%.2ff, %.2ff, %.2ff, 1.0f);\n", 
-                g_PlayerSpawnPosition.x, g_PlayerSpawnPosition.y, g_PlayerSpawnPosition.z);
-            printf("g_PlayerSpawnYaw      = %.2ff;\n\n", g_PlayerSpawnYaw);
+                g_Player.position.x, g_Player.position.y, g_Player.position.z);
+            printf("g_PlayerSpawnYaw      = %.2ff;\n\n", g_Player.yaw);
             fflush(stdout);
 
             // Herda posição da FreeCam como novo alvo da LookAt
             glm::vec4 front;
-            front.x = cos(g_FreeCamPitch) * cos(g_FreeCamYaw);
-            front.y = sin(g_FreeCamPitch);
-            front.z = cos(g_FreeCamPitch) * sin(g_FreeCamYaw);
+            front.x = cos(g_FreeCam.pitch) * cos(g_FreeCam.yaw);
+            front.y = sin(g_FreeCam.pitch);
+            front.z = cos(g_FreeCam.pitch) * sin(g_FreeCam.yaw);
             front.w = 0.0f;
             front   = normalize(front);
 
             // O ponto que a câmera estava "olhando" vira o novo lookat_target
-            float orbit_dist = 1.0f;
-            glm::vec4 lookat_target = g_FreeCamPosition + front * orbit_dist;
+            float orbit_dist = 4.0f;
+            glm::vec4 lookat_target = g_FreeCam.position + front * orbit_dist;
 
             // Recalcula theta/phi/distance
-            glm::vec4 diff = g_FreeCamPosition - lookat_target;
-            g_LookAtTarget = g_PlayerSpawnPosition + glm::vec4(0.0f, 0.8f, 0.0f, 0.0f);
+            glm::vec4 diff = g_FreeCam.position - lookat_target;
+            g_LookAtTarget = g_Player.position + glm::vec4(0.0f, 0.8f, 0.0f, 0.0f);
             g_CameraDistance = norm(diff);
 
             if (g_CameraDistance < 0.01f) g_CameraDistance = orbit_dist;
