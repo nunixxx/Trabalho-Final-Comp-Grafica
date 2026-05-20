@@ -354,8 +354,10 @@ int main(int argc, char* argv[])
         {
             float r = g_CameraDistance;
             float y = r * sin(g_CameraPhi);
-            float z = r * cos(g_CameraPhi) * cos(g_CameraTheta);
-            float x = r * cos(g_CameraPhi) * sin(g_CameraTheta);
+
+            float behindAngle = g_PlayerSpawnYaw + PI;  // direção de trás do soldado
+            float z = r * cos(g_CameraPhi) * cos(behindAngle);
+            float x = r * cos(g_CameraPhi) * sin(behindAngle);
 
             glm::vec4 lookat = g_LookAtTarget;
             camera_position_c  = lookat + glm::vec4(x, y, z, 0.0f);
@@ -412,7 +414,7 @@ int main(int argc, char* argv[])
         {
             glm::mat4 soldierModelMatrix =
                 Matrix_Translate(g_PlayerSpawnPosition.x, g_PlayerSpawnPosition.y, g_PlayerSpawnPosition.z)
-                * Matrix_Rotate_Y(g_PlayerSpawnYaw + PI)
+                * Matrix_Rotate_Y(g_PlayerSpawnYaw)
                 * Matrix_Scale(0.05f, 0.05f, 0.05f);
 
             DrawModel("soldier", soldierModelMatrix); // <-- Desenha o soldado usando a mesma função
@@ -948,7 +950,8 @@ void CursorPosCallback(GLFWwindow* window, double xpos, double ypos)
         float dx = xpos - g_LastCursorPosX;
         float dy = ypos - g_LastCursorPosY;
 
-        g_CameraTheta -= 0.01f * dx;
+        //g_CameraTheta -= 0.01f * dx;
+        g_PlayerSpawnYaw -= 0.01f * dx;   // mouse gira o soldado
         g_CameraPhi   += 0.01f * dy;
 
         float phimax =  PI / 2;
@@ -1032,7 +1035,7 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mod)
 
             // Recalcula theta/phi/distance
             glm::vec4 diff = g_FreeCamPosition - lookat_target;
-            g_LookAtTarget = lookat_target;
+            g_LookAtTarget = g_PlayerSpawnPosition + glm::vec4(0.0f, 0.8f, 0.0f, 0.0f);
             g_CameraDistance = norm(diff);
 
             if (g_CameraDistance < 0.01f) g_CameraDistance = orbit_dist;
