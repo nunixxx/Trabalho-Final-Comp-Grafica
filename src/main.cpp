@@ -49,8 +49,6 @@ GLuint LoadShader_Fragment(const char* filename);
 void LoadShader(const char* filename, GLuint shader_id);
 GLuint CreateGpuProgram(GLuint vertex_shader_id, GLuint fragment_shader_id);
 
-void RenderSoldier(glm::vec4 position, float yaw, float scale = 0.05f);void RenderMap(glm::mat4 model);
-
 void TextRendering_Init();
 float TextRendering_LineHeight(GLFWwindow* window);
 float TextRendering_CharWidth(GLFWwindow* window);
@@ -94,17 +92,17 @@ float g_CameraDistance = 3.0f;
 
 bool g_FreeCam = false;
 
-glm::vec4 g_PlayerSpawnPosition = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+glm::vec4 g_PlayerSpawnPosition = glm::vec4(-38.08f, 0.74f, -161.84f, 1.0f);
 float     g_PlayerSpawnYaw      = 0.0f;
 
-glm::vec4 g_FreeCamPosition = glm::vec4(0.0f, 1.0f, 3.5f, 1.0f);
-glm::vec4 g_LookAtTarget = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+glm::vec4 g_FreeCamPosition = glm::vec4(-38.08f, 0.74f, -161.84f, 1.0f);
+glm::vec4 g_LookAtTarget = glm::vec4(-38.08f, 0.74f, -161.84f, 1.0f);
 
 float g_FreeCamYaw = -PI/2.0f;
 float g_FreeCamPitch = 0.0f;
 
 // junto das outras globais de câmera
-glm::vec4 g_FreeCamPositionBackup = glm::vec4(0.0f, 1.0f, 3.5f, 1.0f);
+glm::vec4 g_FreeCamPositionBackup = glm::vec4(-38.08f, 0.74f, -161.84f, 1.0f);
 float     g_FreeCamYawBackup      = -PI/2.0f;
 float     g_FreeCamPitchBackup    = 0.0f;
 
@@ -391,20 +389,9 @@ int main(int argc, char* argv[])
         glUniformMatrix4fv(g_projection_uniform, 1, GL_FALSE, glm::value_ptr(projection));
 
         // =========================================================
-        // Renderiza o mapa Doom — um draw call por material
-        // =========================================================
-        /*
-        glm::mat4 mapModel = Matrix_Scale(0.01f, 0.01f, 0.01f);
-        RenderMap(mapModel);
-
-        if (!g_FreeCam) RenderSoldier(g_PlayerSpawnPosition, g_PlayerSpawnYaw);
-        TextRendering_ShowFramesPerSecond(window);
-        */
-
-        // =========================================================
         // Renderiza o mapa Doom
         // =========================================================
-        glm::mat4 mapModelMatrix = Matrix_Scale(0.01f, 0.01f, 0.01f);
+        glm::mat4 mapModelMatrix = Matrix_Scale(0.05f, 0.05f, 0.05f);
         DrawModel("map", mapModelMatrix); // <-- Renderização direta e rápida
 
         // =========================================================
@@ -415,7 +402,7 @@ int main(int argc, char* argv[])
             glm::mat4 soldierModelMatrix =
                 Matrix_Translate(g_PlayerSpawnPosition.x, g_PlayerSpawnPosition.y, g_PlayerSpawnPosition.z)
                 * Matrix_Rotate_Y(g_PlayerSpawnYaw)
-                * Matrix_Scale(0.05f, 0.05f, 0.05f);
+                * Matrix_Scale(0.1f, 0.1f, 0.1f);
 
             DrawModel("soldier", soldierModelMatrix); // <-- Desenha o soldado usando a mesma função
         }
@@ -757,69 +744,6 @@ void BuildTrianglesAndAddToVirtualScene(ObjModel* model)
            g_VirtualScene.size(), model_coefficients.size()/4, indices.size());
 }
 
-// =========================================================
-// RenderMap: renderiza o mapa
-// =========================================================
-void RenderMap(glm::mat4 model)
-{
-    glUniformMatrix4fv(g_model_uniform, 1, GL_FALSE, glm::value_ptr(model));
-
-    for (auto& kv : g_VirtualScene)
-    {
-        if (kv.first.find("Joint_") != std::string::npos)
-            continue; // pula objetos do soldado
-
-        const SceneObject& obj = kv.second;
-        glUniform4f(g_bbox_min_uniform,
-            obj.bbox_min.x, obj.bbox_min.y, obj.bbox_min.z, 1.0f);
-        glUniform4f(g_bbox_max_uniform,
-            obj.bbox_max.x, obj.bbox_max.y, obj.bbox_max.z, 1.0f);
-        glUniform1i(g_texture_index_uniform,
-            obj.material_id >= 0 ? obj.material_id : 0);
-        glUniform1i(g_has_texture_uniform,
-            obj.material_id >= 0 ? 1 : 0);
-
-        glBindVertexArray(obj.vertex_array_object_id);
-        glDrawElements(obj.rendering_mode, (GLsizei)obj.num_indices,
-            GL_UNSIGNED_INT, (void*)(obj.first_index * sizeof(GLuint)));
-        glBindVertexArray(0);
-    }
-}
-
-// =========================================================
-// RenderSoldier: renderiza o modelo do soldado
-// =========================================================
-void RenderSoldier(glm::vec4 position, float yaw, float scale)
-{
-    glm::mat4 model =
-        Matrix_Translate(position.x, position.y, position.z)
-      * Matrix_Rotate_Y(yaw + PI)
-      * Matrix_Scale(scale, scale, scale);
-
-    glUniformMatrix4fv(g_model_uniform, 1, GL_FALSE, glm::value_ptr(model));
-
-    for (auto& kv : g_VirtualScene)
-    {
-        if (kv.first.find("Joint_") == std::string::npos)
-            continue;
-
-        const SceneObject& obj = kv.second;
-        glUniform4f(g_bbox_min_uniform,
-            obj.bbox_min.x, obj.bbox_min.y, obj.bbox_min.z, 1.0f);
-        glUniform4f(g_bbox_max_uniform,
-            obj.bbox_max.x, obj.bbox_max.y, obj.bbox_max.z, 1.0f);
-        glUniform1i(g_texture_index_uniform,
-            obj.material_id >= 0 ? obj.material_id : 0);
-        glUniform1i(g_has_texture_uniform,
-            obj.material_id >= 0 ? 1 : 0);
-
-        glBindVertexArray(obj.vertex_array_object_id);
-        glDrawElements(obj.rendering_mode, (GLsizei)obj.num_indices,
-            GL_UNSIGNED_INT, (void*)(obj.first_index * sizeof(GLuint)));
-        glBindVertexArray(0);
-    }
-}
-
 GLuint LoadShader_Vertex(const char* filename)
 {
     GLuint vertex_shader_id = glCreateShader(GL_VERTEX_SHADER);
@@ -1020,6 +944,12 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mod)
             // Spawn do personagem na posição atual da FreeCam
             g_PlayerSpawnPosition = g_FreeCamPosition;
             g_PlayerSpawnYaw      = g_FreeCamYaw;
+
+            printf("\n[POSICAO ATUAL]\n");
+            printf("g_PlayerSpawnPosition = glm::vec4(%.2ff, %.2ff, %.2ff, 1.0f);\n", 
+                g_PlayerSpawnPosition.x, g_PlayerSpawnPosition.y, g_PlayerSpawnPosition.z);
+            printf("g_PlayerSpawnYaw      = %.2ff;\n\n", g_PlayerSpawnYaw);
+            fflush(stdout);
 
             // Herda posição da FreeCam como novo alvo da LookAt
             glm::vec4 front;

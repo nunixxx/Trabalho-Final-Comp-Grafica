@@ -172,7 +172,7 @@ ModelAsset BuildModelAsset(ObjModel* model)
 }
 
 // =========================================================
-// NOVA FUNÇÃO: Renderiza qualquer modelo instanciado
+// Renderiza qualquer modelo instanciado
 // =========================================================
 void DrawModel(const std::string& model_name, glm::mat4 model_matrix)
 {
