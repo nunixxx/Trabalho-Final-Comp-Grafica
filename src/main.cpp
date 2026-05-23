@@ -37,6 +37,7 @@
 #include "matrices.h"
 
 #include "modelRendering/model_rendering.h"
+#include "collision/collision.h"
 
 // Antiga declaração de ObjModel
 
@@ -61,6 +62,9 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mode
 void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
 void CursorPosCallback(GLFWwindow* window, double xpos, double ypos);
 void ScrollCallback(GLFWwindow* window, double xoffset, double yoffset);
+
+// Colisao
+AABB GetPlayerAABB(glm::vec4 position);
 
 // Antiga declaração de SceneObject
 
@@ -94,6 +98,8 @@ struct FreeCamInfo
 #define PI 3.141592f
 #define FREECAM TRUE
 #define LOOKAT FALSE
+#define PLAYER_HALF_W 0.3f
+#define PLAYER_HEIGHT 1.0f
 
 float g_ScreenRatio = 1.0f;
 
@@ -107,7 +113,10 @@ float g_CameraDistance = 5.0f;
 
 bool g_CamMode = LOOKAT;
 
-PlayerInfo g_Player = { glm::vec4(-38.08f, 0.74f, -161.84f, 1.0f), -1.57f };
+CollisionMesh g_CollisionMesh;
+//-38.08f, 0.74f, -161.84f, 1.0f
+//0.0f, 0.0f, -1.0f, 1.0f
+PlayerInfo g_Player = { glm::vec4(0.0f, 0.0f, -1.0f, 1.0f), -1.57f };
 
 FreeCamInfo g_FreeCam = { g_Player.position, g_Player.yaw, 0.0f };
 
@@ -333,6 +342,9 @@ int main(int argc, char* argv[])
     /// Nova Função para renderização de objs:
     g_ModelRegistry["map"] = BuildModelAsset(&mapmodel);
 
+    g_CollisionMesh = BuildCollisionMesh(g_ModelRegistry["map"]);
+
+    printf("Colisão: %zu boxes construídas.\n", g_CollisionMesh.boxes.size());
     
     TextRendering_Init();
 
@@ -999,6 +1011,21 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mod)
         fprintf(stdout, "Shaders recarregados!\n");
         fflush(stdout);
     }
+}
+
+AABB GetPlayerAABB(glm::vec4 position) {
+    AABB box;
+    box.min = glm::vec3(
+        position.x - PLAYER_HALF_W,
+        position.y,
+        position.z - PLAYER_HALF_W
+    );
+    box.max = glm::vec3(
+        position.x + PLAYER_HALF_W,
+        position.y + PLAYER_HEIGHT,
+        position.z + PLAYER_HALF_W
+    );
+    return box;
 }
 
 void ErrorCallback(int error, const char* description)
