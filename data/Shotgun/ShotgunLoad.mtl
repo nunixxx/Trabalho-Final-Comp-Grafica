@@ -1,0 +1,82 @@
+# 3ds Max Wavefront OBJ Exporter v0.97b - (c)2007 guruware
+# File Created: 16.11.2018 21:00:31
+
+newmtl Material_000001
+	Ns 33.0000
+	Ni 1.5000
+	d 1.0000
+	Tr 0.0000
+	Tf 1.0000 1.0000 1.0000 
+	illum 2
+	Ka 1.0000 1.0000 1.0000
+	Kd 1.0000 1.0000 1.0000
+	Ks 1.0000 1.0000 1.0000
+	Ke 0.0000 0.0000 0.0000
+	map_Ka ShotgunReceiver_d.png
+	map_Kd ShotgunReceiver_d.png
+	map_bump ShotgunReceiver_n.png
+	bump ShotgunReceiver_n.png
+
+newmtl Material_0005e1
+	Ns 33.0000
+	Ni 1.5000
+	d 1.0000
+	Tr 0.0000
+	Tf 1.0000 1.0000 1.0000 
+	illum 2
+	Ka 1.0000 1.0000 1.0000
+	Kd 1.0000 1.0000 1.0000
+	Ks 1.0000 1.0000 1.0000
+	Ke 0.0000 0.0000 0.0000
+	map_Ka ShotgunBarrelShort_d.png
+	map_Kd ShotgunBarrelShort_d.png
+	map_bump ShotgunBarrelShort_n.png
+	bump ShotgunBarrelShort_n.png
+
+newmtl Material_0008d0
+	Ns 33.0000
+	Ni 1.5000
+	d 1.0000
+	Tr 0.0000
+	Tf 1.0000 1.0000 1.0000 
+	illum 2
+	Ka 1.0000 1.0000 1.0000
+	Kd 1.0000 1.0000 1.0000
+	Ks 1.0000 1.0000 1.0000
+	Ke 0.0000 0.0000 0.0000
+	map_Ka ShotgunStock_d.png
+	map_Kd ShotgunStock_d.png
+	map_bump ShotgunStock_n.png
+	bump ShotgunStock_n.png
+
+newmtl Material_000982
+	Ns 33.0000
+	Ni 1.5000
+	d 1.0000
+	Tr 0.0000
+	Tf 1.0000 1.0000 1.0000 
+	illum 2
+	Ka 1.0000 1.0000 1.0000
+	Kd 1.0000 1.0000 1.0000
+	Ks 1.0000 1.0000 1.0000
+	Ke 0.0000 0.0000 0.0000
+	map_Ka ShotgunStock_d.png
+	map_Kd ShotgunStock_d.png
+	map_bump ShotgunStock_n.png
+	bump ShotgunStock_n.png
+
+newmtl Material_000a87
+	Ns 33.0000
+	Ni 1.5000
+	d 1.0000
+	Tr 0.0000
+	Tf 1.0000 1.0000 1.0000 
+	illum 2
+	Ka 1.0000 1.0000 1.0000
+	Kd 1.0000 1.0000 1.0000
+	Ks 1.0000 1.0000 1.0000
+	Ke 0.0000 0.0000 0.0000
+	map_Ka DoubleBarrelMuzzleBreaks_d.png
+	map_Kd DoubleBarrelMuzzleBreaks_d.png
+	map_bump DoubleBarrelMuzzleBreaks_n.png
+	bump DoubleBarrelMuzzleBreaks_n.png

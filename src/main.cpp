@@ -41,14 +41,16 @@
 
 // Antiga declaração de ObjModel
 
-void BuildTrianglesAndAddToVirtualScene(ObjModel*);
-void ComputeNormals(ObjModel* model);
 void LoadShadersFromFiles();
+void ComputeNormals(ObjModel* model);
+void BindAllTextures(GLuint program_id);
 GLuint LoadTextureImage(const char* filename);
 GLuint LoadShader_Vertex(const char* filename);
 GLuint LoadShader_Fragment(const char* filename);
 void LoadShader(const char* filename, GLuint shader_id);
+void LoadMaterialTextures(ObjModel* model, const char* basepath);
 GLuint CreateGpuProgram(GLuint vertex_shader_id, GLuint fragment_shader_id);
+
 
 void TextRendering_Init();
 float TextRendering_LineHeight(GLFWwindow* window);
@@ -114,8 +116,9 @@ float g_CameraDistance = 5.0f;
 bool g_CamMode = LOOKAT;
 
 CollisionMesh g_CollisionMesh;
-//-38.08f, 0.74f, -161.84f, 1.0f
-//0.0f, 0.0f, -1.0f, 1.0f
+
+//-38.08f, 0.74f, -161.84f, 1.0f DENTRO DO MAPA
+//0.0f, 0.0f, -1.0f, 1.0f CORDENADAS (0,0)
 PlayerInfo g_Player = { glm::vec4(0.0f, 0.0f, -1.0f, 1.0f), -1.57f };
 
 FreeCamInfo g_FreeCam = { g_Player.position, g_Player.yaw, 0.0f };
@@ -139,7 +142,231 @@ GLint g_has_texture_uniform;
 // O registro que guarda a geometria pronta para ser instanciada
 std::map<std::string, ModelAsset> g_ModelRegistry;
 
-// Protótipos das novas funções
+int main(int argc, char* argv[])
+{
+    int success = glfwInit();
+    if (!success)
+    {
+        fprintf(stderr, "ERROR: glfwInit() failed.\n");
+        std::exit(EXIT_FAILURE);
+    }
+
+    glfwSetErrorCallback(ErrorCallback);
+
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+
+    #ifdef __APPLE__
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+    #endif
+
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
+    GLFWwindow* window;
+    window = glfwCreateWindow(800, 600, "INF01047 - Doom E1M1", NULL, NULL);
+    if (!window)
+    {
+        glfwTerminate();
+        fprintf(stderr, "ERROR: glfwCreateWindow() failed.\n");
+        std::exit(EXIT_FAILURE);
+    }
+
+    glfwSetKeyCallback(window, KeyCallback);
+    glfwSetMouseButtonCallback(window, MouseButtonCallback);
+    glfwSetCursorPosCallback(window, CursorPosCallback);
+    glfwSetScrollCallback(window, ScrollCallback);
+
+    glfwMakeContextCurrent(window);
+    gladLoadGLLoader((GLADloadproc) glfwGetProcAddress);
+
+    glfwSetFramebufferSizeCallback(window, FramebufferSizeCallback);
+    FramebufferSizeCallback(window, 800, 600);
+
+    const GLubyte *vendor      = glGetString(GL_VENDOR);
+    const GLubyte *renderer    = glGetString(GL_RENDERER);
+    const GLubyte *glversion   = glGetString(GL_VERSION);
+    const GLubyte *glslversion = glGetString(GL_SHADING_LANGUAGE_VERSION);
+
+    printf("GPU: %s, %s, OpenGL %s, GLSL %s\n", vendor, renderer, glversion, glslversion);
+
+    LoadShadersFromFiles();
+
+    // =========================================================
+    // Carrega o jogador
+    ObjModel soldierModel("../../data/Soldier/model.obj");
+    ComputeNormals(&soldierModel);
+    LoadMaterialTextures(&soldierModel, "../../data/Soldier/");
+    g_ModelRegistry["soldier"] = BuildModelAsset(&soldierModel); // Renderiza
+
+    // =========================================================
+    // Carrega o mapa Doom E1M1
+    ObjModel mapmodel("../../data/Map/Doom_E1M1.obj");
+    ComputeNormals(&mapmodel);
+    //LoadMaterialTextures(&mapmodel, "../../data/Map/");
+    g_ModelRegistry["map"] = BuildModelAsset(&mapmodel); // Renderiza
+
+    // =========================================================
+    // Carrega o inimigo
+    ObjModel enimeModel("../../data/Enime/Model.obj");
+    ComputeNormals(&enimeModel);
+    LoadMaterialTextures(&enimeModel, "../../data/Enime/");
+    g_ModelRegistry["enime"] = BuildModelAsset(&enimeModel); // Renderiza
+
+    
+    // =========================================================
+    // Carrega arma do inimigo
+    ObjModel enimeGunModel("../../data/SoldierGun/gun_marvin.obj");
+    ComputeNormals(&enimeGunModel   );
+    LoadMaterialTextures(&enimeGunModel , "../../data/SoldierGun/");
+    g_ModelRegistry["enimeGun"] = BuildModelAsset(&enimeGunModel  ); // Renderiza
+
+    // =========================================================
+    // Carrega shotgun do jogador
+    ObjModel shotgunModel("../../data/Shotgun/shotgunLoad.obj");
+    ComputeNormals(&shotgunModel);
+    LoadMaterialTextures(&shotgunModel, "../../data/Shotgun/");
+    g_ModelRegistry["shotgun"] = BuildModelAsset(&shotgunModel); // Renderiza
+
+    g_CollisionMesh = BuildCollisionMesh(g_ModelRegistry["map"]);
+
+    printf("Colisao: %zu boxes construidas.\n", g_CollisionMesh.boxes.size());
+    
+    TextRendering_Init();
+
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_BACK);
+    glFrontFace(GL_CCW);
+
+    // Ativa todas as texturas (uma vez, antes do loop)
+    glUseProgram(g_GpuProgramID);
+    BindAllTextures(g_GpuProgramID);
+    glUseProgram(0);
+
+    while (!glfwWindowShouldClose(window))
+    {
+        glClearColor(0.8f, 0.8f, 0.8f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        glUseProgram(g_GpuProgramID);
+
+        glm::vec4 camera_position_c;
+        glm::vec4 camera_view_vector;
+        glm::vec4 camera_up_vector = glm::vec4(0.0f, 1.0f, 0.0f, 0.0f);
+
+        if (g_CamMode == LOOKAT)
+        {
+            float r = g_CameraDistance;
+            float y = r * sin(g_CameraPhi);
+
+            float behindAngle = g_Player.yaw + PI;  // direção de trás do soldado
+            float z = r * cos(g_CameraPhi) * cos(behindAngle);
+            float x = r * cos(g_CameraPhi) * sin(behindAngle);
+
+            glm::vec4 lookat = g_LookAtTarget;
+            camera_position_c  = lookat + glm::vec4(x, y, z, 0.0f);
+            camera_view_vector = lookat - camera_position_c;
+        }
+        else
+        {
+            glm::vec4 front;
+            front.x = cos(g_FreeCam.pitch) * cos(g_FreeCam.yaw);
+            front.y = sin(g_FreeCam.pitch);
+            front.z = cos(g_FreeCam.pitch) * sin(g_FreeCam.yaw);
+            front.w = 0.0f;
+
+            camera_position_c  = g_FreeCam.position;
+            camera_view_vector = front;
+        }
+
+        glm::mat4 view = Matrix_Camera_View(
+            camera_position_c,
+            camera_view_vector,
+            camera_up_vector
+        );
+
+        float nearplane = -0.1f;
+        float farplane  = -200.0f;
+
+        float field_of_view = PI / 3.0f;
+        glm::mat4 projection = Matrix_Perspective(field_of_view, g_ScreenRatio, nearplane, farplane);
+
+        glUniformMatrix4fv(g_view_uniform,       1, GL_FALSE, glm::value_ptr(view));
+        glUniformMatrix4fv(g_projection_uniform, 1, GL_FALSE, glm::value_ptr(projection));
+
+        // =========================================================
+        // Renderiza o mapa Doom
+        // =========================================================
+        glm::mat4 mapModelMatrix = Matrix_Scale(0.05f, 0.05f, 0.05f);
+        DrawModel("map", mapModelMatrix); // <-- Renderização direta e rápida
+
+        // =========================================================
+        // Renderiza o inimigo
+        glm::mat4 enimeModelMatrix =
+                Matrix_Translate(-15.0f, 0.0f, -10.0f)
+                * Matrix_Rotate_Y(PI / 4.0f)
+                * Matrix_Scale(0.1f, 0.1f, 0.1f);
+        DrawModel("enime", enimeModelMatrix); // <-- Renderização direta e rápida
+
+        glm::mat4 enimeGunMatrix =
+                Matrix_Translate(-10.0f, 0.0f, -10.0f)
+                * Matrix_Rotate_Y(PI / 4.0f)
+                * Matrix_Scale(2.0f, 2.0f, 2.0f);
+        DrawModel("enimeGun", enimeGunMatrix); // <-- Renderização direta e rápida
+
+        glm::mat4 shotgunMatrix =
+                Matrix_Translate(-5.0f, 0.0f, -10.0f)
+                * Matrix_Rotate_Y(PI / 4.0f)
+                * Matrix_Scale(0.05f, 0.05f, 0.05f);
+        DrawModel("shotgun", shotgunMatrix); // <-- Renderização direta e rápida
+
+        // =========================================================
+        // Renderiza o soldado (se não estiver na câmera livre)
+        // =========================================================
+        if (g_CamMode == LOOKAT) 
+        {
+            glm::mat4 soldierModelMatrix =
+                Matrix_Translate(g_Player.position.x, g_Player.position.y, g_Player.position.z)
+                * Matrix_Rotate_Y(g_Player.yaw)
+                * Matrix_Scale(0.1f, 0.1f, 0.1f);
+
+            DrawModel("soldier", soldierModelMatrix); // <-- Desenha o soldado usando a mesma função
+        }
+
+        // =========================================================
+        // Movimentação FreeCam
+        // =========================================================
+        if (g_CamMode == FREECAM)
+        {
+            float cameraSpeed = 0.1f;
+
+            glm::vec4 front;
+            front.x = cos(g_FreeCam.pitch) * cos(g_FreeCam.yaw);
+            front.y = sin(g_FreeCam.pitch);
+            front.z = cos(g_FreeCam.pitch) * sin(g_FreeCam.yaw);
+            front.w = 0.0f;
+            front = normalize(front);
+
+            glm::vec4 right = crossproduct(front, glm::vec4(0, 1, 0, 0));
+            right = normalize(right);
+
+            if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+                g_FreeCam.position += front * cameraSpeed;
+            if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+                g_FreeCam.position -= front * cameraSpeed;
+            if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+                g_FreeCam.position -= right * cameraSpeed;
+            if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+                g_FreeCam.position += right * cameraSpeed;
+        }
+
+        glfwSwapBuffers(window);
+        glfwPollEvents();
+    }
+
+    glfwTerminate();
+    return 0;
+}
 
 // =========================================================
 // Carrega uma textura PNG e retorna o GLuint, usando cache
@@ -270,198 +497,6 @@ void BindAllTextures(GLuint program_id)
         glUniform1iv(loc, MAX_TEXTURES, samplers);
 }
 
-int main(int argc, char* argv[])
-{
-    int success = glfwInit();
-    if (!success)
-    {
-        fprintf(stderr, "ERROR: glfwInit() failed.\n");
-        std::exit(EXIT_FAILURE);
-    }
-
-    glfwSetErrorCallback(ErrorCallback);
-
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-
-    #ifdef __APPLE__
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-    #endif
-
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-
-    GLFWwindow* window;
-    window = glfwCreateWindow(800, 600, "INF01047 - Doom E1M1", NULL, NULL);
-    if (!window)
-    {
-        glfwTerminate();
-        fprintf(stderr, "ERROR: glfwCreateWindow() failed.\n");
-        std::exit(EXIT_FAILURE);
-    }
-
-    glfwSetKeyCallback(window, KeyCallback);
-    glfwSetMouseButtonCallback(window, MouseButtonCallback);
-    glfwSetCursorPosCallback(window, CursorPosCallback);
-    glfwSetScrollCallback(window, ScrollCallback);
-
-    glfwMakeContextCurrent(window);
-    gladLoadGLLoader((GLADloadproc) glfwGetProcAddress);
-
-    glfwSetFramebufferSizeCallback(window, FramebufferSizeCallback);
-    FramebufferSizeCallback(window, 800, 600);
-
-    const GLubyte *vendor      = glGetString(GL_VENDOR);
-    const GLubyte *renderer    = glGetString(GL_RENDERER);
-    const GLubyte *glversion   = glGetString(GL_VERSION);
-    const GLubyte *glslversion = glGetString(GL_SHADING_LANGUAGE_VERSION);
-
-    printf("GPU: %s, %s, OpenGL %s, GLSL %s\n", vendor, renderer, glversion, glslversion);
-
-    LoadShadersFromFiles();
-
-    // =========================================================
-    // Carrega o jogador Doom E1M1
-    // =========================================================
-    ObjModel soldierModel("../../data/Soldier/model.obj");
-    ComputeNormals(&soldierModel);
-    LoadMaterialTextures(&soldierModel, "../../data/Soldier/");
-    /// BuildTrianglesAndAddToVirtualScene(&soldierModel);
-
-    /// Nova Função para renderização de objs:
-    g_ModelRegistry["soldier"] = BuildModelAsset(&soldierModel);
-
-
-    // =========================================================
-    // Carrega o mapa Doom E1M1
-    // =========================================================
-    ObjModel mapmodel("../../data/Map/Doom_E1M1.obj");
-    ComputeNormals(&mapmodel);
-    //LoadMaterialTextures(&mapmodel, "../../data/Map/");
-    //BuildTrianglesAndAddToVirtualScene(&mapmodel);
-
-    /// Nova Função para renderização de objs:
-    g_ModelRegistry["map"] = BuildModelAsset(&mapmodel);
-
-    g_CollisionMesh = BuildCollisionMesh(g_ModelRegistry["map"]);
-
-    printf("Colisão: %zu boxes construídas.\n", g_CollisionMesh.boxes.size());
-    
-    TextRendering_Init();
-
-    glEnable(GL_DEPTH_TEST);
-    glEnable(GL_CULL_FACE);
-    glCullFace(GL_BACK);
-    glFrontFace(GL_CCW);
-
-    // Ativa todas as texturas (uma vez, antes do loop)
-    glUseProgram(g_GpuProgramID);
-    BindAllTextures(g_GpuProgramID);
-    glUseProgram(0);
-
-    while (!glfwWindowShouldClose(window))
-    {
-        glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-        glUseProgram(g_GpuProgramID);
-
-        glm::vec4 camera_position_c;
-        glm::vec4 camera_view_vector;
-        glm::vec4 camera_up_vector = glm::vec4(0.0f, 1.0f, 0.0f, 0.0f);
-
-        if (g_CamMode == LOOKAT)
-        {
-            float r = g_CameraDistance;
-            float y = r * sin(g_CameraPhi);
-
-            float behindAngle = g_Player.yaw + PI;  // direção de trás do soldado
-            float z = r * cos(g_CameraPhi) * cos(behindAngle);
-            float x = r * cos(g_CameraPhi) * sin(behindAngle);
-
-            glm::vec4 lookat = g_LookAtTarget;
-            camera_position_c  = lookat + glm::vec4(x, y, z, 0.0f);
-            camera_view_vector = lookat - camera_position_c;
-        }
-        else
-        {
-            glm::vec4 front;
-            front.x = cos(g_FreeCam.pitch) * cos(g_FreeCam.yaw);
-            front.y = sin(g_FreeCam.pitch);
-            front.z = cos(g_FreeCam.pitch) * sin(g_FreeCam.yaw);
-            front.w = 0.0f;
-
-            camera_position_c  = g_FreeCam.position;
-            camera_view_vector = front;
-        }
-
-        glm::mat4 view = Matrix_Camera_View(
-            camera_position_c,
-            camera_view_vector,
-            camera_up_vector
-        );
-
-        float nearplane = -0.1f;
-        float farplane  = -200.0f;
-
-        float field_of_view = PI / 3.0f;
-        glm::mat4 projection = Matrix_Perspective(field_of_view, g_ScreenRatio, nearplane, farplane);
-
-        glUniformMatrix4fv(g_view_uniform,       1, GL_FALSE, glm::value_ptr(view));
-        glUniformMatrix4fv(g_projection_uniform, 1, GL_FALSE, glm::value_ptr(projection));
-
-        // =========================================================
-        // Renderiza o mapa Doom
-        // =========================================================
-        glm::mat4 mapModelMatrix = Matrix_Scale(0.05f, 0.05f, 0.05f);
-        DrawModel("map", mapModelMatrix); // <-- Renderização direta e rápida
-
-        // =========================================================
-        // Renderiza o soldado (se não estiver na câmera livre)
-        // =========================================================
-        if (g_CamMode == LOOKAT) 
-        {
-            glm::mat4 soldierModelMatrix =
-                Matrix_Translate(g_Player.position.x, g_Player.position.y, g_Player.position.z)
-                * Matrix_Rotate_Y(g_Player.yaw)
-                * Matrix_Scale(0.1f, 0.1f, 0.1f);
-
-            DrawModel("soldier", soldierModelMatrix); // <-- Desenha o soldado usando a mesma função
-        }
-
-        // =========================================================
-        // Movimentação FreeCam
-        // =========================================================
-        if (g_CamMode == FREECAM)
-        {
-            float cameraSpeed = 0.1f;
-
-            glm::vec4 front;
-            front.x = cos(g_FreeCam.pitch) * cos(g_FreeCam.yaw);
-            front.y = sin(g_FreeCam.pitch);
-            front.z = cos(g_FreeCam.pitch) * sin(g_FreeCam.yaw);
-            front.w = 0.0f;
-            front = normalize(front);
-
-            glm::vec4 right = crossproduct(front, glm::vec4(0, 1, 0, 0));
-            right = normalize(right);
-
-            if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-                g_FreeCam.position += front * cameraSpeed;
-            if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-                g_FreeCam.position -= front * cameraSpeed;
-            if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-                g_FreeCam.position -= right * cameraSpeed;
-            if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-                g_FreeCam.position += right * cameraSpeed;
-        }
-
-        glfwSwapBuffers(window);
-        glfwPollEvents();
-    }
-
-    glfwTerminate();
-    return 0;
-}
 
 void LoadShadersFromFiles()
 {
@@ -576,193 +611,6 @@ void ComputeNormals(ObjModel* model)
             }
         }
     }
-}
-
-// =========================================================
-// BuildTrianglesAndAddToVirtualScene
-//
-// Estratégia: um VAO por shape. Dentro de cada shape,
-// as faces são agrupadas por material_id. Para cada grupo
-// (shape, material_id) criamos um SceneObject separado,
-// todos compartilhando o mesmo VAO mas com first_index e
-// num_indices diferentes.
-// =========================================================
-void BuildTrianglesAndAddToVirtualScene(ObjModel* model)
-{
-    // Vamos criar UM VAO global que contém todos os vértices
-    // e um EBO (índices) compartilhado. Cada SceneObject
-    // referencia um subintervalo do EBO.
-
-    GLuint vertex_array_object_id;
-    glGenVertexArrays(1, &vertex_array_object_id);
-    glBindVertexArray(vertex_array_object_id);
-
-    std::vector<GLuint> indices;
-    std::vector<float>  model_coefficients;
-    std::vector<float>  normal_coefficients;
-    std::vector<float>  texture_coefficients;
-
-    for (size_t shape = 0; shape < model->shapes.size(); ++shape)
-    {
-        const tinyobj::mesh_t& mesh = model->shapes[shape].mesh;
-        size_t num_triangles = mesh.num_face_vertices.size();
-
-        // Agrupa triângulos por material
-        // material_id -> lista de índices de triângulo
-        std::map<int, std::vector<size_t>> mat_triangles;
-        for (size_t tri = 0; tri < num_triangles; ++tri)
-        {
-            int mat_id = mesh.material_ids.empty() ? -1 : mesh.material_ids[tri];
-            mat_triangles[mat_id].push_back(tri);
-        }
-
-        for (auto& mat_entry : mat_triangles)
-        {
-            int mat_id = mat_entry.first;
-            const std::vector<size_t>& tris = mat_entry.second;
-
-            size_t first_index = indices.size();
-
-            const float minval = std::numeric_limits<float>::lowest();
-            const float maxval = std::numeric_limits<float>::max();
-            glm::vec3 bbox_min = glm::vec3(maxval, maxval, maxval);
-            glm::vec3 bbox_max = glm::vec3(minval, minval, minval);
-
-            for (size_t tri : tris)
-            {
-                assert(mesh.num_face_vertices[tri] == 3);
-
-                for (size_t vertex = 0; vertex < 3; ++vertex)
-                {
-                    tinyobj::index_t idx = mesh.indices[3*tri + vertex];
-
-                    // O índice aponta para a posição atual no array de vértices
-                    size_t current_vertex = model_coefficients.size() / 4;
-                    indices.push_back((GLuint)current_vertex);
-
-                    const float vx = model->attrib.vertices[3*idx.vertex_index + 0];
-                    const float vy = model->attrib.vertices[3*idx.vertex_index + 1];
-                    const float vz = model->attrib.vertices[3*idx.vertex_index + 2];
-
-                    model_coefficients.push_back(vx);
-                    model_coefficients.push_back(vy);
-                    model_coefficients.push_back(vz);
-                    model_coefficients.push_back(1.0f);
-
-                    bbox_min.x = std::min(bbox_min.x, vx);
-                    bbox_min.y = std::min(bbox_min.y, vy);
-                    bbox_min.z = std::min(bbox_min.z, vz);
-                    bbox_max.x = std::max(bbox_max.x, vx);
-                    bbox_max.y = std::max(bbox_max.y, vy);
-                    bbox_max.z = std::max(bbox_max.z, vz);
-
-                    if (idx.normal_index != -1)
-                    {
-                        normal_coefficients.push_back(model->attrib.normals[3*idx.normal_index + 0]);
-                        normal_coefficients.push_back(model->attrib.normals[3*idx.normal_index + 1]);
-                        normal_coefficients.push_back(model->attrib.normals[3*idx.normal_index + 2]);
-                        normal_coefficients.push_back(0.0f);
-                    }
-                    else
-                    {
-                        // Normal dummy para não desalinhar o VBO
-                        normal_coefficients.push_back(0.0f);
-                        normal_coefficients.push_back(1.0f);
-                        normal_coefficients.push_back(0.0f);
-                        normal_coefficients.push_back(0.0f);
-                    }
-
-                    if (idx.texcoord_index != -1)
-                    {
-                        texture_coefficients.push_back(model->attrib.texcoords[2*idx.texcoord_index + 0]);
-                        texture_coefficients.push_back(model->attrib.texcoords[2*idx.texcoord_index + 1]);
-                    }
-                    else
-                    {
-                        texture_coefficients.push_back(0.0f);
-                        texture_coefficients.push_back(0.0f);
-                    }
-                }
-            }
-
-            size_t num_indices = indices.size() - first_index;
-
-            // Determina o slot de textura para este material
-            int tex_slot = -1;
-            if (mat_id >= 0 && mat_id < (int)model->materials.size())
-            {
-                const std::string& matname = model->materials[mat_id].name;
-                auto it = g_MaterialTextureIndex.find(matname);
-                if (it != g_MaterialTextureIndex.end())
-                    tex_slot = it->second;
-            }
-
-            // Nome único: "shape_name#mat_id"
-            std::string obj_name = model->shapes[shape].name + "#" + std::to_string(mat_id);
-
-            SceneObject theobject;
-            theobject.name                   = obj_name;
-            theobject.first_index            = first_index;
-            theobject.num_indices            = num_indices;
-            theobject.rendering_mode         = GL_TRIANGLES;
-            theobject.vertex_array_object_id = vertex_array_object_id;
-            theobject.bbox_min               = bbox_min;
-            theobject.bbox_max               = bbox_max;
-            theobject.material_id            = tex_slot;
-
-            g_VirtualScene[obj_name] = theobject;
-        }
-    }
-
-    // -------------------------------------------------------
-    // Envia VBOs para a GPU
-    // -------------------------------------------------------
-
-    // VBO posições
-    GLuint VBO_model_coefficients_id;
-    glGenBuffers(1, &VBO_model_coefficients_id);
-    glBindBuffer(GL_ARRAY_BUFFER, VBO_model_coefficients_id);
-    glBufferData(GL_ARRAY_BUFFER, model_coefficients.size() * sizeof(float), NULL, GL_STATIC_DRAW);
-    glBufferSubData(GL_ARRAY_BUFFER, 0, model_coefficients.size() * sizeof(float), model_coefficients.data());
-    glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 0, 0);
-    glEnableVertexAttribArray(0);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-    // VBO normais
-    {
-        GLuint VBO_normal_coefficients_id;
-        glGenBuffers(1, &VBO_normal_coefficients_id);
-        glBindBuffer(GL_ARRAY_BUFFER, VBO_normal_coefficients_id);
-        glBufferData(GL_ARRAY_BUFFER, normal_coefficients.size() * sizeof(float), NULL, GL_STATIC_DRAW);
-        glBufferSubData(GL_ARRAY_BUFFER, 0, normal_coefficients.size() * sizeof(float), normal_coefficients.data());
-        glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 0, 0);
-        glEnableVertexAttribArray(1);
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-    }
-
-    // VBO coordenadas de textura
-    {
-        GLuint VBO_texture_coefficients_id;
-        glGenBuffers(1, &VBO_texture_coefficients_id);
-        glBindBuffer(GL_ARRAY_BUFFER, VBO_texture_coefficients_id);
-        glBufferData(GL_ARRAY_BUFFER, texture_coefficients.size() * sizeof(float), NULL, GL_STATIC_DRAW);
-        glBufferSubData(GL_ARRAY_BUFFER, 0, texture_coefficients.size() * sizeof(float), texture_coefficients.data());
-        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 0, 0);
-        glEnableVertexAttribArray(2);
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-    }
-
-    // EBO índices
-    GLuint indices_id;
-    glGenBuffers(1, &indices_id);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indices_id);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(GLuint), NULL, GL_STATIC_DRAW);
-    glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, indices.size() * sizeof(GLuint), indices.data());
-
-    glBindVertexArray(0);
-
-    printf("Cena construída: %zu objetos, %zu vértices, %zu índices.\n",
-           g_VirtualScene.size(), model_coefficients.size()/4, indices.size());
 }
 
 GLuint LoadShader_Vertex(const char* filename)
