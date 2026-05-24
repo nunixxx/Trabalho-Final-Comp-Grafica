@@ -95,6 +95,14 @@ struct FreeCamInfo
     float pitch;
 };
 
+struct HealthPack {
+    glm::vec4 position;
+    bool active;
+    float scale;
+};
+
+std::vector<HealthPack> healthPacks;
+
 // Número máximo de texturas suportado pelo shader
 #define MAX_TEXTURES 64
 #define PI 3.141592f
@@ -227,6 +235,15 @@ int main(int argc, char* argv[])
     LoadMaterialTextures(&shotgunModel, "../../data/Shotgun/");
     g_ModelRegistry["shotgun"] = BuildModelAsset(&shotgunModel); // Renderiza
 
+    ObjModel healthPackModel("../../data/Healthpack/HealthpackTextured.Obj");
+    ComputeNormals(&healthPackModel);
+    LoadMaterialTextures(&healthPackModel, "../../data/Healthpack/");
+    g_ModelRegistry["healthpack"] = BuildModelAsset(&healthPackModel);
+
+    // Vamos adicionar dois health packs de teste na cena:
+    healthPacks.push_back({glm::vec4( 5.0f, -1.0f,  5.0f, 1.0f), true, 0.5f}); // Posição 1
+    healthPacks.push_back({glm::vec4(-5.0f, -1.0f, -5.0f, 1.0f), true, 0.5f}); // Posição 2
+
     g_CollisionMesh = BuildCollisionMesh(g_ModelRegistry["map"]);
 
     printf("Colisao: %zu boxes construidas.\n", g_CollisionMesh.boxes.size());
@@ -245,6 +262,8 @@ int main(int argc, char* argv[])
 
     while (!glfwWindowShouldClose(window))
     {
+
+        
         glClearColor(0.8f, 0.8f, 0.8f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -333,6 +352,22 @@ int main(int argc, char* argv[])
             DrawModel("soldier", soldierModelMatrix); // <-- Desenha o soldado usando a mesma função
         }
 
+        float current_time = (float)glfwGetTime();
+        float healthpack_angle = current_time * 1.5f; // Multiplicador define a velocidade do giro
+
+        for (size_t i = 0; i < healthPacks.size(); i++)
+        {
+            if (healthPacks[i].active)
+            {
+                glm::mat4 hpModelMatrix = 
+                      Matrix_Translate(healthPacks[i].position.x, healthPacks[i].position.y, healthPacks[i].position.z)
+                    * Matrix_Rotate_Y(healthpack_angle)
+                    * Matrix_Scale(healthPacks[i].scale, healthPacks[i].scale, healthPacks[i].scale);
+
+                DrawModel("healthpack", hpModelMatrix); 
+            }
+        }
+
         // =========================================================
         // Movimentação FreeCam
         // =========================================================
@@ -371,6 +406,9 @@ int main(int argc, char* argv[])
 // =========================================================
 // Carrega uma textura PNG e retorna o GLuint, usando cache
 // =========================================================
+// =========================================================
+// Carrega uma textura PNG/TGA/JPG e retorna o GLuint, usando cache
+// =========================================================
 GLuint LoadTextureImage(const char* filename)
 {
     // Cache: não recarrega a mesma imagem
@@ -382,7 +420,9 @@ GLuint LoadTextureImage(const char* filename)
 
     stbi_set_flip_vertically_on_load(true);
     int width, height, channels;
-    unsigned char *data = stbi_load(filename, &width, &height, &channels, 4);
+    
+    // MUDANÇA 1: Usar '0' em vez de '4' para que a biblioteca detecte os canais reais
+    unsigned char *data = stbi_load(filename, &width, &height, &channels, 0);
 
     if (data == NULL)
     {
@@ -402,8 +442,17 @@ GLuint LoadTextureImage(const char* filename)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
+    // MUDANÇA 2: Configurar o OpenGL de acordo com a quantidade de canais
+    GLenum format = GL_RGB;
+    if (channels == 4)
+        format = GL_RGBA;
+    else if (channels == 1)
+        format = GL_RED;
+
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8_ALPHA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+    
+    // MUDANÇA 3: Passar o formato dinâmico aqui
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8_ALPHA8, width, height, 0, format, GL_UNSIGNED_BYTE, data);
     glGenerateMipmap(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, 0);
 
