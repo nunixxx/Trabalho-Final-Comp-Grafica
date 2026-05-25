@@ -146,6 +146,9 @@ GLint g_bbox_min_uniform;
 GLint g_bbox_max_uniform;
 GLint g_texture_index_uniform;
 GLint g_has_texture_uniform;
+GLint g_camera_pos_uniform;
+GLint g_light_positions_uniform;
+GLint g_num_lights_uniform;
 
 // O registro que guarda a geometria pronta para ser instanciada
 std::map<std::string, ModelAsset> g_ModelRegistry;
@@ -312,6 +315,21 @@ int main(int argc, char* argv[])
 
         glUniformMatrix4fv(g_view_uniform,       1, GL_FALSE, glm::value_ptr(view));
         glUniformMatrix4fv(g_projection_uniform, 1, GL_FALSE, glm::value_ptr(projection));
+
+        // Envia a câmera (ainda é necessário para o cálculo do reflexo especular na direção dos seus olhos)
+        glUniform4f(g_camera_pos_uniform, camera_position_c.x, camera_position_c.y, camera_position_c.z, 1.0f);
+
+        // Cria um array com as posições estáticas das suas luzes pelo mapa
+        glm::vec4 luzes[3];
+        luzes[0] = glm::vec4( 5.0f, 2.0f,  5.0f, 1.0f); // Luz fixa na sala da direita
+        luzes[1] = glm::vec4(-5.0f, 2.0f, -5.0f, 1.0f); // Luz fixa na sala da esquerda
+        luzes[2] = glm::vec4( 0.0f, 3.0f, -20.0f, 1.0f); // Luz fixa lá no fundo do mapa
+
+        // Avisa o shader que estamos enviando 3 luzes
+        glUniform1i(g_num_lights_uniform, 3);
+
+        // Envia o array inteiro para a placa de vídeo de uma vez só
+        glUniform4fv(g_light_positions_uniform, 3, glm::value_ptr(luzes[0]));
 
         // =========================================================
         // Renderiza o mapa Doom
@@ -565,6 +583,9 @@ void LoadShadersFromFiles()
     g_bbox_max_uniform      = glGetUniformLocation(g_GpuProgramID, "bbox_max");
     g_texture_index_uniform = glGetUniformLocation(g_GpuProgramID, "texture_index");
     g_has_texture_uniform   = glGetUniformLocation(g_GpuProgramID, "has_texture");
+    g_camera_pos_uniform      = glGetUniformLocation(g_GpuProgramID, "camera_position");
+    g_light_positions_uniform = glGetUniformLocation(g_GpuProgramID, "light_positions");
+    g_num_lights_uniform      = glGetUniformLocation(g_GpuProgramID, "num_lights");
 
     glUseProgram(g_GpuProgramID);
     glUseProgram(0);
