@@ -99,7 +99,7 @@ struct HealthPack {
 std::vector<HealthPack> healthPacks;
 
 // Número máximo de texturas suportado pelo shader
-#define MAX_TEXTURES 64
+#define MAX_TEXTURES 128
 #define PI 3.141592f
 #define FREECAM TRUE
 #define LOOKAT FALSE
@@ -144,6 +144,7 @@ GLint g_has_texture_uniform;
 
 // O registro que guarda a geometria pronta para ser instanciada
 std::map<std::string, ModelAsset> g_ModelRegistry;
+std::map<std::string, ModelPaths> g_PathsRegistry;
 
 int main(int argc, char* argv[])
 {
@@ -195,45 +196,36 @@ int main(int argc, char* argv[])
     LoadShadersFromFiles();
 
     // =========================================================
-    // Carrega o jogador
-    ObjModel soldierModel("../../data/Soldier/model.obj");
-    ComputeNormals(&soldierModel);
-    LoadMaterialTextures(&soldierModel, "../../data/Soldier/");
-    g_ModelRegistry["soldier"] = BuildModelAsset(&soldierModel); // Renderiza
+    // 1. CARREGA OS CAMINHOS DO ARQUIVO CSV
+    // =========================================================
+    printf("Lendo assets.csv...\n");
+    LoadPathsCSV("../../data/paths.csv");
 
     // =========================================================
-    // Carrega o mapa Doom E1M1
-    ObjModel mapmodel("../../data/Map/Doom_E1M1.obj");
-    ComputeNormals(&mapmodel);
-    //LoadMaterialTextures(&mapmodel, "../../data/Map/");
-    g_ModelRegistry["map"] = BuildModelAsset(&mapmodel); // Renderiza
-
+    // 2. CARREGA E CONSTROI TODOS OS MODELOS AUTOMATICAMENTE
     // =========================================================
-    // Carrega o inimigo
-    ObjModel enimeModel("../../data/Enime/Model.obj");
-    ComputeNormals(&enimeModel);
-    LoadMaterialTextures(&enimeModel, "../../data/Enime/");
-    g_ModelRegistry["enime"] = BuildModelAsset(&enimeModel); // Renderiza
+    for (const auto& pair : g_PathsRegistry) 
+    {
+        // pair.first é a chave (ex: "soldier", "map")
+        // pair.second é a struct ModelPaths com os dados
+        const std::string& name = pair.first;
+        const ModelPaths& paths = pair.second;
 
-    
-    // =========================================================
-    // Carrega arma do inimigo
-    ObjModel enimeGunModel("../../data/SoldierGun/gun_marvin.obj");
-    ComputeNormals(&enimeGunModel   );
-    LoadMaterialTextures(&enimeGunModel , "../../data/SoldierGun/");
-    g_ModelRegistry["enimeGun"] = BuildModelAsset(&enimeGunModel  ); // Renderiza
-
-    // =========================================================
-    // Carrega shotgun do jogador
-    ObjModel shotgunModel("../../data/Shotgun/shotgunLoad.obj");
-    ComputeNormals(&shotgunModel);
-    LoadMaterialTextures(&shotgunModel, "../../data/Shotgun/");
-    g_ModelRegistry["shotgun"] = BuildModelAsset(&shotgunModel); // Renderiza
-
-    ObjModel healthPackModel("../../data/Healthpack/HealthpackTextured.Obj");
-    ComputeNormals(&healthPackModel);
-    LoadMaterialTextures(&healthPackModel, "../../data/Healthpack/");
-    g_ModelRegistry["healthpack"] = BuildModelAsset(&healthPackModel);
+        printf("\n--- Construindo asset: %s ---\n", name.c_str());
+        
+        // Pega o caminho do OBJ
+        ObjModel tempModel(paths.GetModelPath().c_str());
+        ComputeNormals(&tempModel);
+        
+        // Pega o caminho da textura
+        if(paths.GetUseTexture()){
+                LoadMaterialTextures(&tempModel, paths.GetTexturePath().c_str());
+        }
+        
+        // Salva no registro de renderização usando o nome do objeto
+        g_ModelRegistry[name] = BuildModelAsset(&tempModel); 
+    }
+    printf("\nTodos os modelos foram carregados com sucesso!\n\n");
 
     // Adiciona dois health packs de teste na cena:
     healthPacks.push_back({glm::vec4( 5.0f, -1.0f,  5.0f, 1.0f), true, 0.5f}); // Posição 1
@@ -367,17 +359,17 @@ int main(int argc, char* argv[])
 
         // =========================================================
         // Renderiza o inimigo
-        glm::mat4 enimeModelMatrix =
+        glm::mat4 enemieModelMatrix =
                 Matrix_Translate(-15.0f, 0.0f, -10.0f)
                 * Matrix_Rotate_Y(PI / 4.0f)
                 * Matrix_Scale(0.1f, 0.1f, 0.1f);
-        DrawModel("enime", enimeModelMatrix); // <-- Renderização direta e rápida
+        DrawModel("enemie", enemieModelMatrix); // <-- Renderização direta e rápida
 
-        glm::mat4 enimeGunMatrix =
+        glm::mat4 enemieGunMatrix =
                 Matrix_Translate(-10.0f, 0.0f, -10.0f)
                 * Matrix_Rotate_Y(PI / 4.0f)
                 * Matrix_Scale(2.0f, 2.0f, 2.0f);
-        DrawModel("enimeGun", enimeGunMatrix); // <-- Renderização direta e rápida
+        DrawModel("enemieGun", enemieGunMatrix); // <-- Renderização direta e rápida
 
         glm::mat4 shotgunMatrix =
                 Matrix_Translate(-5.0f, 0.0f, -10.0f)
@@ -474,6 +466,7 @@ GLuint LoadTextureImage(const char* filename)
 // =========================================================
 void LoadMaterialTextures(ObjModel* model, const char* basepath)
 {
+
     std::string base(basepath ? basepath : "");
 
     for (size_t i = 0; i < model->materials.size(); ++i)

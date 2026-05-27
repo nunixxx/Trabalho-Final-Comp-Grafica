@@ -1,0 +1,7 @@
+Name,Model,Texture,UseTexture
+soldier,Soldier/model.obj,Soldier/,true
+map,Map/Doom_E1M1.obj,Map/,false
+enemie,enemie/Model.obj,enemie/,true
+enemieGun,SoldierGun/gun_marvin.obj,SoldierGun/,true
+shotgun,Shotgun/shotgunLoad.obj,Shotgun/,true
+healthpack,Healthpack/HealthpackTextured.Obj,Healthpack/,true

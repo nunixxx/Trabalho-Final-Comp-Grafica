@@ -5,8 +5,14 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <tiny_obj_loader.h>
 
+#include <iostream>
+#include <fstream>
+#include <sstream>
+#include <string>
+
 extern std::map<std::string, ModelAsset> g_ModelRegistry;
 extern std::map<std::string, int>        g_MaterialTextureIndex;
+extern std::map<std::string, ModelPaths> g_PathsRegistry;
 extern GLint g_model_uniform;
 extern GLint g_bbox_min_uniform;
 extern GLint g_bbox_max_uniform;
@@ -196,5 +202,35 @@ void DrawModel(const std::string& model_name, glm::mat4 model_matrix)
         glDrawElements(obj.rendering_mode, (GLsizei)obj.num_indices,
             GL_UNSIGNED_INT, (void*)(obj.first_index * sizeof(GLuint)));
         glBindVertexArray(0);
+    }
+}
+
+void LoadPathsCSV(const std::string& file_path) {
+    std::ifstream file(file_path);
+    if (!file.is_open()) return;
+
+    std::string line;
+    bool isFirstLine = true;
+    
+    while (std::getline(file, line)) {
+        if (line.empty()) continue;
+        if (isFirstLine) { isFirstLine = false; continue; }
+
+        std::stringstream ss(line);
+        std::string name, modelPath, texturePath, useTexStr;
+
+        if (std::getline(ss, name, ',') &&
+            std::getline(ss, modelPath, ',') &&
+            std::getline(ss, texturePath, ',') &&
+            std::getline(ss, useTexStr, ',')) 
+        {
+            if (!useTexStr.empty() && useTexStr.back() == '\r') {
+                useTexStr.pop_back();
+            }
+
+            bool useTexture = (useTexStr == "true" || useTexStr == "1");
+
+            g_PathsRegistry.emplace(name, ModelPaths(name, "../../data/" + modelPath, "../../data/" + texturePath, useTexture));
+        }
     }
 }
