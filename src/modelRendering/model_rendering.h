@@ -112,3 +112,4 @@ ModelAsset BuildModelAsset(ObjModel* model);
 void DrawModel(const std::string& model_name, glm::mat4 model_matrix);
 void LoadPathsCSV(const std::string& file_path);
 void ComputeNormals(ObjModel* model);
+void LoadModelsFromCSV(const std::string& file_path);

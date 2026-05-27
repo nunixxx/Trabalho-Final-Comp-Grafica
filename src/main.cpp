@@ -208,15 +208,10 @@ int main(int argc, char* argv[])
 
     LoadShadersFromFiles();
 
-    // =========================================================
-    // 1. CARREGA OS CAMINHOS DO ARQUIVO CSV
-    // =========================================================
+    /*
     printf("Lendo assets.csv...\n");
     LoadPathsCSV(PATH_CSV);
 
-    // =========================================================
-    // 2. CARREGA E CONSTROI TODOS OS MODELOS AUTOMATICAMENTE
-    // =========================================================
     for (const auto& pair : g_PathsRegistry) 
     {
         // pair.first é a chave (ex: "soldier", "map")
@@ -238,6 +233,11 @@ int main(int argc, char* argv[])
         // Salva no registro de renderização usando o nome do objeto
         g_ModelRegistry[name] = BuildModelAsset(&tempModel); 
     }
+
+    */
+
+    LoadModelsFromCSV(PATH_CSV);
+
     printf("\nTodos os modelos foram carregados com sucesso!\n\n");
 
     // Adiciona dois health packs de teste na cena:

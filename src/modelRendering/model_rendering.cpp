@@ -1,4 +1,5 @@
 #include "model_rendering.h"
+#include "..\textureRendering\texture_rendering.h"
 
 #include <map>
 #include <algorithm>
@@ -325,6 +326,56 @@ void LoadPathsCSV(const std::string& file_path) {
             bool useTexture = (useTexStr == "true" || useTexStr == "1");
 
             g_PathsRegistry.emplace(name, ModelPaths(name, "../../data/" + modelPath, "../../data/" + texturePath, useTexture));
+        }
+    }
+}
+
+void LoadModelsFromCSV(const std::string& file_path) {
+    std::ifstream file(file_path);
+    if (!file.is_open()) {
+        std::cerr << "Erro: Nao foi possivel abrir " << file_path << "\n";
+        return;
+    }
+
+    std::string line;
+    bool isFirstLine = true;
+    
+    while (std::getline(file, line)) {
+        if (line.empty()) continue;
+        if (isFirstLine) { isFirstLine = false; continue; }
+
+        std::stringstream ss(line);
+        std::string name, modelPath, texturePath, useTexStr;
+
+        if (std::getline(ss, name, ',') &&
+            std::getline(ss, modelPath, ',') &&
+            std::getline(ss, texturePath, ',') &&
+            std::getline(ss, useTexStr, ',')) 
+        {
+            // Limpa o '\r' e converte para booleano
+            if (!useTexStr.empty() && useTexStr.back() == '\r') useTexStr.pop_back();
+            bool useTexture = (useTexStr == "true" || useTexStr == "1");
+
+            // Constrói as strings completas
+            std::string fullModelPath = "../../data/" + modelPath;
+            std::string fullTexturePath = "../../data/" + texturePath;
+
+            printf("\n--- Construindo asset direto do CSV: %s ---\n", name.c_str());
+            
+            // ==========================================
+            // CARREGA O MODELO IMEDIATAMENTE AQUI!
+            // ==========================================
+            ObjModel tempModel(fullModelPath.c_str());
+            ComputeNormals(&tempModel);
+            
+            if (useTexture) {
+                LoadMaterialTextures(&tempModel, fullTexturePath.c_str());
+            } else {
+                printf("Textura desativada. Pulando...\n");
+            }
+            
+            // Salva direto no registro final da engine
+            g_ModelRegistry[name] = BuildModelAsset(&tempModel); 
         }
     }
 }
