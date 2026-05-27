@@ -1,13 +1,10 @@
 #include "model_rendering.h"
 
-// Includes necessários para o código interno das funções funcionar
 #include <map>
 #include <algorithm>
 #include <glm/gtc/type_ptr.hpp>
-#include <tiny_obj_loader.h> // Para acessar a estrutura interna do ObjModel
+#include <tiny_obj_loader.h>
 
-// --- REFERÊNCIAS EXTERNAS DO main.cpp ---
-// Sem isso, suas funções não acharão os uniforms do OpenGL nem os dicionários.
 extern std::map<std::string, ModelAsset> g_ModelRegistry;
 extern std::map<std::string, int>        g_MaterialTextureIndex;
 extern GLint g_model_uniform;
@@ -15,13 +12,7 @@ extern GLint g_bbox_min_uniform;
 extern GLint g_bbox_max_uniform;
 extern GLint g_texture_index_uniform;
 extern GLint g_has_texture_uniform;
-// ----------------------------------------
 
-/// FUNÇÕES ALTERNATIVAS PARA RENDERIZAR OS OBJ DISTINTOS
-
-// =========================================================
-// NOVA FUNÇÃO: Constrói os triângulos e retorna um Asset isolado
-// =========================================================
 ModelAsset BuildModelAsset(ObjModel* model)
 {
     GLuint vertex_array_object_id;
@@ -58,8 +49,19 @@ ModelAsset BuildModelAsset(ObjModel* model)
             glm::vec3 bbox_min = glm::vec3(maxval, maxval, maxval);
             glm::vec3 bbox_max = glm::vec3(minval, minval, minval);
 
+            SceneObject theobject;
+            theobject.name                   = model->shapes[shape].name + "#" + std::to_string(mat_id);
+            theobject.rendering_mode         = GL_TRIANGLES;
+            theobject.vertex_array_object_id = vertex_array_object_id;
+            theobject.material_id            = -1;
+
             for (size_t tri : tris)
             {
+                // -------------------------------------------------------
+                // NOVO: captura os 3 vértices do triângulo para colisão
+                // -------------------------------------------------------
+                RawTriangle rawTri;
+
                 for (size_t vertex = 0; vertex < 3; ++vertex)
                 {
                     tinyobj::index_t idx = mesh.indices[3*tri + vertex];
@@ -107,10 +109,19 @@ ModelAsset BuildModelAsset(ObjModel* model)
                         texture_coefficients.push_back(0.0f);
                         texture_coefficients.push_back(0.0f);
                     }
+
+                    // Armazena vértice no triângulo cru
+                    if      (vertex == 0) rawTri.v0 = glm::vec3(vx, vy, vz);
+                    else if (vertex == 1) rawTri.v1 = glm::vec3(vx, vy, vz);
+                    else                  rawTri.v2 = glm::vec3(vx, vy, vz);
                 }
+
+                // Guarda o triângulo cru no SceneObject
+                theobject.tris.push_back(rawTri);
             }
 
             size_t num_indices = indices.size() - first_index;
+
             int tex_slot = -1;
             if (mat_id >= 0 && mat_id < (int)model->materials.size())
             {
@@ -120,22 +131,17 @@ ModelAsset BuildModelAsset(ObjModel* model)
                     tex_slot = it->second;
             }
 
-            SceneObject theobject;
-            theobject.name                   = model->shapes[shape].name + "#" + std::to_string(mat_id);
-            theobject.first_index            = first_index;
-            theobject.num_indices            = num_indices;
-            theobject.rendering_mode         = GL_TRIANGLES;
-            theobject.vertex_array_object_id = vertex_array_object_id;
-            theobject.bbox_min               = bbox_min;
-            theobject.bbox_max               = bbox_max;
-            theobject.material_id            = tex_slot;
+            theobject.first_index = first_index;
+            theobject.num_indices = num_indices;
+            theobject.bbox_min    = bbox_min;
+            theobject.bbox_max    = bbox_max;
+            theobject.material_id = tex_slot;
 
-            // Diferença principal aqui: insere no asset, não na cena global
-            asset.parts.push_back(theobject); 
+            asset.parts.push_back(theobject);
         }
     }
 
-    // Envia VBOs para a GPU
+    // --- VBOs para GPU (igual ao original) ---
     GLuint VBO_model_coefficients_id;
     glGenBuffers(1, &VBO_model_coefficients_id);
     glBindBuffer(GL_ARRAY_BUFFER, VBO_model_coefficients_id);
@@ -171,16 +177,12 @@ ModelAsset BuildModelAsset(ObjModel* model)
     return asset;
 }
 
-// =========================================================
-// Renderiza qualquer modelo instanciado
-// =========================================================
 void DrawModel(const std::string& model_name, glm::mat4 model_matrix)
 {
     if (g_ModelRegistry.find(model_name) == g_ModelRegistry.end())
-        return; // Falha silenciosa se o modelo não existir
+        return;
 
     const ModelAsset& asset = g_ModelRegistry[model_name];
-
     glUniformMatrix4fv(g_model_uniform, 1, GL_FALSE, glm::value_ptr(model_matrix));
 
     for (const SceneObject& obj : asset.parts)
@@ -188,7 +190,7 @@ void DrawModel(const std::string& model_name, glm::mat4 model_matrix)
         glUniform4f(g_bbox_min_uniform, obj.bbox_min.x, obj.bbox_min.y, obj.bbox_min.z, 1.0f);
         glUniform4f(g_bbox_max_uniform, obj.bbox_max.x, obj.bbox_max.y, obj.bbox_max.z, 1.0f);
         glUniform1i(g_texture_index_uniform, obj.material_id >= 0 ? obj.material_id : 0);
-        glUniform1i(g_has_texture_uniform, obj.material_id >= 0 ? 1 : 0);
+        glUniform1i(g_has_texture_uniform,   obj.material_id >= 0 ? 1 : 0);
 
         glBindVertexArray(obj.vertex_array_object_id);
         glDrawElements(obj.rendering_mode, (GLsizei)obj.num_indices,

@@ -60,6 +60,13 @@ struct ObjModel
     }
 };
 
+// =========================================================
+// NOVO: Triângulo cru para colisão (vértices em espaço local)
+// =========================================================
+struct RawTriangle {
+    glm::vec3 v0, v1, v2;
+};
+
 struct SceneObject
 {
     std::string  name;
@@ -70,6 +77,10 @@ struct SceneObject
     glm::vec3    bbox_min;
     glm::vec3    bbox_max;
     int          material_id;
+
+    // NOVO: triângulos em espaço local (escala 1:1, sem mapScale)
+    // Populado por BuildModelAsset. Usado por BuildCollisionMesh.
+    std::vector<RawTriangle> tris;
 };
 
 struct ModelAsset

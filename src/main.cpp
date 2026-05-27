@@ -49,6 +49,7 @@ GLuint LoadShader_Vertex(const char* filename);
 GLuint LoadShader_Fragment(const char* filename);
 void LoadShader(const char* filename, GLuint shader_id);
 void LoadMaterialTextures(ObjModel* model, const char* basepath);
+void LoadObjModelAsset(const char* name, const char* obj_path, const char* texture_basepath = nullptr);
 GLuint CreateGpuProgram(GLuint vertex_shader_id, GLuint fragment_shader_id);
 
 
@@ -65,12 +66,6 @@ void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
 void CursorPosCallback(GLFWwindow* window, double xpos, double ypos);
 void ScrollCallback(GLFWwindow* window, double xoffset, double yoffset);
 
-// Colisao
-AABB GetPlayerAABB(glm::vec4 position);
-
-// Antiga declaração de SceneObject
-
-std::map<std::string, SceneObject> g_VirtualScene;
 
 // =========================================================
 // Sistema de texturas
@@ -127,7 +122,7 @@ CollisionMesh g_CollisionMesh;
 
 //-38.08f, 0.74f, -161.84f, 1.0f DENTRO DO MAPA
 //0.0f, 0.0f, -1.0f, 1.0f CORDENADAS (0,0)
-PlayerInfo g_Player = { glm::vec4(0.0f, 0.0f, -1.0f, 1.0f), -1.57f };
+PlayerInfo g_Player = { glm::vec4(-38.08f, 0.74f, -161.84f, 1.0f), -1.57f };
 
 FreeCamInfo g_FreeCam = { g_Player.position, g_Player.yaw, 0.0f };
 
@@ -240,13 +235,11 @@ int main(int argc, char* argv[])
     LoadMaterialTextures(&healthPackModel, "../../data/Healthpack/");
     g_ModelRegistry["healthpack"] = BuildModelAsset(&healthPackModel);
 
-    // Vamos adicionar dois health packs de teste na cena:
+    // Adiciona dois health packs de teste na cena:
     healthPacks.push_back({glm::vec4( 5.0f, -1.0f,  5.0f, 1.0f), true, 0.5f}); // Posição 1
     healthPacks.push_back({glm::vec4(-5.0f, -1.0f, -5.0f, 1.0f), true, 0.5f}); // Posição 2
 
-    g_CollisionMesh = BuildCollisionMesh(g_ModelRegistry["map"]);
-
-    printf("Colisao: %zu boxes construidas.\n", g_CollisionMesh.boxes.size());
+    g_CollisionMesh = BuildCollisionMesh(g_ModelRegistry["map"], 0.05f);
     
     TextRendering_Init();
 
@@ -285,8 +278,47 @@ int main(int argc, char* argv[])
             glm::vec4 lookat = g_LookAtTarget;
             camera_position_c  = lookat + glm::vec4(x, y, z, 0.0f);
             camera_view_vector = lookat - camera_position_c;
+
+            const float PLAYER_RADIUS = 0.3f;
+            const float MOVE_SPEED    = 0.05f;
+
+            glm::vec3 front(
+                cos(g_Player.yaw),
+                0.0f,
+                sin(g_Player.yaw)
+            );
+            glm::vec3 right = glm::vec3(front.z, 0.0f, -front.x); // perpendicular no plano XZ
+
+            glm::vec3 desiredPos(g_Player.position.x,
+                                g_Player.position.y,
+                                g_Player.position.z);
+
+            if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) desiredPos += right * MOVE_SPEED;
+            if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) desiredPos -= right * MOVE_SPEED;
+            if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) desiredPos -= front * MOVE_SPEED;
+            if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) desiredPos += front * MOVE_SPEED;
+
+            // Resolução de colisão por triângulos (substitui o AABB antigo)
+            glm::vec3 resolvedPos = ResolvePlayerCollision(
+                g_CollisionMesh,
+                desiredPos,
+                PLAYER_RADIUS,
+                PLAYER_HEIGHT
+            );
+
+            g_Player.position = glm::vec4(resolvedPos.x, resolvedPos.y, resolvedPos.z, 1.0f);
+
+            // Atualiza alvo da câmera LookAt
+            g_LookAtTarget = g_Player.position + glm::vec4(0.0f, 0.8f, 0.0f, 0.0f);
+
+            glm::mat4 soldierModelMatrix =
+                Matrix_Translate(g_Player.position.x, g_Player.position.y, g_Player.position.z)
+                * Matrix_Rotate_Y(g_Player.yaw)
+                * Matrix_Scale(0.1f, 0.1f, 0.1f);
+
+            DrawModel("soldier", soldierModelMatrix); // <-- Desenha o soldado usando a mesma função
         }
-        else
+        if(g_CamMode == FREECAM)
         {
             glm::vec4 front;
             front.x = cos(g_FreeCam.pitch) * cos(g_FreeCam.yaw);
@@ -296,6 +328,20 @@ int main(int argc, char* argv[])
 
             camera_position_c  = g_FreeCam.position;
             camera_view_vector = front;
+
+            float cameraSpeed = 0.1f;
+
+            glm::vec4 right = crossproduct(front, glm::vec4(0, 1, 0, 0));
+            right = normalize(right);
+
+            if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+                g_FreeCam.position += front * cameraSpeed;
+            if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+                g_FreeCam.position -= front * cameraSpeed;
+            if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+                g_FreeCam.position -= right * cameraSpeed;
+            if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+                g_FreeCam.position += right * cameraSpeed;
         }
 
         glm::mat4 view = Matrix_Camera_View(
@@ -339,19 +385,6 @@ int main(int argc, char* argv[])
                 * Matrix_Scale(0.05f, 0.05f, 0.05f);
         DrawModel("shotgun", shotgunMatrix); // <-- Renderização direta e rápida
 
-        // =========================================================
-        // Renderiza o soldado (se não estiver na câmera livre)
-        // =========================================================
-        if (g_CamMode == LOOKAT) 
-        {
-            glm::mat4 soldierModelMatrix =
-                Matrix_Translate(g_Player.position.x, g_Player.position.y, g_Player.position.z)
-                * Matrix_Rotate_Y(g_Player.yaw)
-                * Matrix_Scale(0.1f, 0.1f, 0.1f);
-
-            DrawModel("soldier", soldierModelMatrix); // <-- Desenha o soldado usando a mesma função
-        }
-
         float current_time = (float)glfwGetTime();
         float healthpack_angle = current_time * 1.5f; // Multiplicador define a velocidade do giro
 
@@ -366,33 +399,6 @@ int main(int argc, char* argv[])
 
                 DrawModel("healthpack", hpModelMatrix); 
             }
-        }
-
-        // =========================================================
-        // Movimentação FreeCam
-        // =========================================================
-        if (g_CamMode == FREECAM)
-        {
-            float cameraSpeed = 0.1f;
-
-            glm::vec4 front;
-            front.x = cos(g_FreeCam.pitch) * cos(g_FreeCam.yaw);
-            front.y = sin(g_FreeCam.pitch);
-            front.z = cos(g_FreeCam.pitch) * sin(g_FreeCam.yaw);
-            front.w = 0.0f;
-            front = normalize(front);
-
-            glm::vec4 right = crossproduct(front, glm::vec4(0, 1, 0, 0));
-            right = normalize(right);
-
-            if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-                g_FreeCam.position += front * cameraSpeed;
-            if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-                g_FreeCam.position -= front * cameraSpeed;
-            if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-                g_FreeCam.position -= right * cameraSpeed;
-            if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-                g_FreeCam.position += right * cameraSpeed;
         }
 
         glfwSwapBuffers(window);
@@ -908,21 +914,6 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mod)
         fprintf(stdout, "Shaders recarregados!\n");
         fflush(stdout);
     }
-}
-
-AABB GetPlayerAABB(glm::vec4 position) {
-    AABB box;
-    box.min = glm::vec3(
-        position.x - PLAYER_HALF_W,
-        position.y,
-        position.z - PLAYER_HALF_W
-    );
-    box.max = glm::vec3(
-        position.x + PLAYER_HALF_W,
-        position.y + PLAYER_HEIGHT,
-        position.z + PLAYER_HALF_W
-    );
-    return box;
 }
 
 void ErrorCallback(int error, const char* description)
