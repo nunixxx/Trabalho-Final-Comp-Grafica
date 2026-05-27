@@ -15,6 +15,8 @@ set(SOURCES
   src/modelRendering/model_rendering.cpp
   src/collision/collision.cpp
   src/textureRendering/texture_rendering.cpp
+  src/entities/game_object.cpp
+  src/entities/player.cpp
 )
 
 cmake_minimum_required(VERSION 3.10)
