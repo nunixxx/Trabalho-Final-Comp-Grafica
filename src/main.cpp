@@ -39,16 +39,15 @@
 #include "modelRendering/model_rendering.h"
 #include "collision/collision.h"
 
+#include "constants.h"
+#include "textureRendering/texture_rendering.h"
+
 // Antiga declaração de ObjModel
 
 void LoadShadersFromFiles();
-void ComputeNormals(ObjModel* model);
-void BindAllTextures(GLuint program_id);
-GLuint LoadTextureImage(const char* filename);
 GLuint LoadShader_Vertex(const char* filename);
 GLuint LoadShader_Fragment(const char* filename);
 void LoadShader(const char* filename, GLuint shader_id);
-void LoadMaterialTextures(ObjModel* model, const char* basepath);
 void LoadObjModelAsset(const char* name, const char* obj_path, const char* texture_basepath = nullptr);
 GLuint CreateGpuProgram(GLuint vertex_shader_id, GLuint fragment_shader_id);
 
@@ -66,21 +65,14 @@ void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
 void CursorPosCallback(GLFWwindow* window, double xpos, double ypos);
 void ScrollCallback(GLFWwindow* window, double xoffset, double yoffset);
 
-
-// =========================================================
-// Sistema de texturas
-// =========================================================
-// Mapeia nome do material -> índice na unidade de textura OpenGL
-std::map<std::string, int>  g_MaterialTextureIndex;
-// Mapeia nome do arquivo de textura -> GLuint (texture object)
-std::map<std::string, GLuint> g_LoadedTextures;
-// Lista ordenada de GLuints para bind no shader (slot 0..N)
-std::vector<GLuint> g_TextureSlots;
-
 struct PlayerInfo
 {
     glm::vec4 position;
+    glm::mat4 matrixScale;
     float yaw;
+    int health;
+    int armor;
+    float movement_speed;
 };
 
 struct FreeCamInfo
@@ -96,33 +88,62 @@ struct HealthPack {
     float scale;
 };
 
+struct EnemieInfo
+{
+    glm::vec4 position;
+    glm::mat4x4 matrixScale;
+    float yaw;
+    // int health;
+    // float movement_speed
+};
+
+// =========================================================
+// Sistema de texturas
+// =========================================================
+// Mapeia nome do material -> índice na unidade de textura OpenGL
+std::map<std::string, int>  g_MaterialTextureIndex;
+// Mapeia nome do arquivo de textura -> GLuint (texture object)
+std::map<std::string, GLuint> g_LoadedTextures;
+// Lista ordenada de GLuints para bind no shader (slot 0..N)
+std::vector<GLuint> g_TextureSlots;
+
 std::vector<HealthPack> healthPacks;
 
-// Número máximo de texturas suportado pelo shader
-#define MAX_TEXTURES 128
-#define PI 3.141592f
-#define FREECAM TRUE
-#define LOOKAT FALSE
-#define PLAYER_HALF_W 0.3f
-#define PLAYER_HEIGHT 1.0f
+GLint g_model_uniform;
+GLint g_view_uniform;
+GLint g_projection_uniform;
+GLint g_object_id_uniform;
+GLint g_bbox_min_uniform;
+GLint g_bbox_max_uniform;
+GLint g_texture_index_uniform;
+GLint g_has_texture_uniform;
+
+glm::vec4 camera_position_c;
+glm::vec4 camera_view_vector;
 
 float g_ScreenRatio = 1.0f;
+
 
 bool g_LeftMouseButtonPressed = false;
 bool g_RightMouseButtonPressed = false;
 bool g_MiddleMouseButtonPressed = false;
 
-float g_CameraTheta = 0.0f;
-float g_CameraPhi = 0.4f;
-float g_CameraDistance = 5.0f;
+float g_CameraTheta = INITIAL_CAMERA_THETA;
+float g_CameraPhi = INITIAL_CAMERA_PHI;
+float g_CameraDistance = INITIAL_CAMERA_DISTANCE;
 
 bool g_CamMode = LOOKAT;
 
 CollisionMesh g_CollisionMesh;
 
-//-38.08f, 0.74f, -161.84f, 1.0f DENTRO DO MAPA
-//0.0f, 0.0f, -1.0f, 1.0f CORDENADAS (0,0)
-PlayerInfo g_Player = { glm::vec4(-38.08f, 0.74f, -161.84f, 1.0f), -1.57f };
+PlayerInfo g_Player = {
+    .position = PLAYER_INITIAL_POSITION,
+    .matrixScale = SOLDIERS_SCALE,
+    .yaw = PLAYER_INITIAL_YAW,
+    .health = PLAYER_INITIAL_HEALTH,
+    .armor = PLAYER_INITIAL_ARMOR,
+    .movement_speed = PLAYER_INITIAL_SPEED
+};
 
 FreeCamInfo g_FreeCam = { g_Player.position, g_Player.yaw, 0.0f };
 
@@ -133,14 +154,6 @@ glm::vec4 g_LookAtTarget = g_Player.position + glm::vec4(0.0f, 0.8f, 0.0f, 0.0f)
 bool g_ShowInfoText = true;
 
 GLuint g_GpuProgramID = 0;
-GLint g_model_uniform;
-GLint g_view_uniform;
-GLint g_projection_uniform;
-GLint g_object_id_uniform;
-GLint g_bbox_min_uniform;
-GLint g_bbox_max_uniform;
-GLint g_texture_index_uniform;
-GLint g_has_texture_uniform;
 
 // O registro que guarda a geometria pronta para ser instanciada
 std::map<std::string, ModelAsset> g_ModelRegistry;
@@ -160,14 +173,14 @@ int main(int argc, char* argv[])
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 
-    #ifdef __APPLE__
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-    #endif
+    //#ifdef __APPLE__
+    //glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+    //#endif
 
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
     GLFWwindow* window;
-    window = glfwCreateWindow(800, 600, "INF01047 - Doom E1M1", NULL, NULL);
+    window = glfwCreateWindow(WINDOW_SIZE_X, WINDOW_SIZE_Y, "INF01047 - Doom E1M1", NULL, NULL);
     if (!window)
     {
         glfwTerminate();
@@ -184,7 +197,7 @@ int main(int argc, char* argv[])
     gladLoadGLLoader((GLADloadproc) glfwGetProcAddress);
 
     glfwSetFramebufferSizeCallback(window, FramebufferSizeCallback);
-    FramebufferSizeCallback(window, 800, 600);
+    FramebufferSizeCallback(window, WINDOW_SIZE_X, WINDOW_SIZE_Y);
 
     const GLubyte *vendor      = glGetString(GL_VENDOR);
     const GLubyte *renderer    = glGetString(GL_RENDERER);
@@ -199,7 +212,7 @@ int main(int argc, char* argv[])
     // 1. CARREGA OS CAMINHOS DO ARQUIVO CSV
     // =========================================================
     printf("Lendo assets.csv...\n");
-    LoadPathsCSV("../../data/paths.csv");
+    LoadPathsCSV(PATH_CSV);
 
     // =========================================================
     // 2. CARREGA E CONSTROI TODOS OS MODELOS AUTOMATICAMENTE
@@ -254,10 +267,6 @@ int main(int argc, char* argv[])
 
         glUseProgram(g_GpuProgramID);
 
-        glm::vec4 camera_position_c;
-        glm::vec4 camera_view_vector;
-        glm::vec4 camera_up_vector = glm::vec4(0.0f, 1.0f, 0.0f, 0.0f);
-
         if (g_CamMode == LOOKAT)
         {
             float r = g_CameraDistance;
@@ -271,9 +280,6 @@ int main(int argc, char* argv[])
             camera_position_c  = lookat + glm::vec4(x, y, z, 0.0f);
             camera_view_vector = lookat - camera_position_c;
 
-            const float PLAYER_RADIUS = 0.3f;
-            const float MOVE_SPEED    = 0.05f;
-
             glm::vec3 front(
                 cos(g_Player.yaw),
                 0.0f,
@@ -285,10 +291,10 @@ int main(int argc, char* argv[])
                                 g_Player.position.y,
                                 g_Player.position.z);
 
-            if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) desiredPos += right * MOVE_SPEED;
-            if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) desiredPos -= right * MOVE_SPEED;
-            if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) desiredPos -= front * MOVE_SPEED;
-            if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) desiredPos += front * MOVE_SPEED;
+            if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) desiredPos += right * g_Player.movement_speed;
+            if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) desiredPos -= right * g_Player.movement_speed;
+            if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) desiredPos -= front * g_Player.movement_speed;
+            if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) desiredPos += front * g_Player.movement_speed;
 
             // Resolução de colisão por triângulos (substitui o AABB antigo)
             glm::vec3 resolvedPos = ResolvePlayerCollision(
@@ -306,7 +312,7 @@ int main(int argc, char* argv[])
             glm::mat4 soldierModelMatrix =
                 Matrix_Translate(g_Player.position.x, g_Player.position.y, g_Player.position.z)
                 * Matrix_Rotate_Y(g_Player.yaw)
-                * Matrix_Scale(0.1f, 0.1f, 0.1f);
+                * SOLDIERS_SCALE;
 
             DrawModel("soldier", soldierModelMatrix); // <-- Desenha o soldado usando a mesma função
         }
@@ -321,32 +327,27 @@ int main(int argc, char* argv[])
             camera_position_c  = g_FreeCam.position;
             camera_view_vector = front;
 
-            float cameraSpeed = 0.1f;
-
             glm::vec4 right = crossproduct(front, glm::vec4(0, 1, 0, 0));
             right = normalize(right);
 
             if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-                g_FreeCam.position += front * cameraSpeed;
+                g_FreeCam.position += front * CAMERA_SPEED;
             if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-                g_FreeCam.position -= front * cameraSpeed;
+                g_FreeCam.position -= front * CAMERA_SPEED;
             if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-                g_FreeCam.position -= right * cameraSpeed;
+                g_FreeCam.position -= right * CAMERA_SPEED;
             if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-                g_FreeCam.position += right * cameraSpeed;
+                g_FreeCam.position += right * CAMERA_SPEED;
         }
 
         glm::mat4 view = Matrix_Camera_View(
             camera_position_c,
             camera_view_vector,
-            camera_up_vector
+            CAMERA_UP_VECTOR
         );
 
-        float nearplane = -0.1f;
-        float farplane  = -200.0f;
-
         float field_of_view = PI / 3.0f;
-        glm::mat4 projection = Matrix_Perspective(field_of_view, g_ScreenRatio, nearplane, farplane);
+        glm::mat4 projection = Matrix_Perspective(field_of_view, g_ScreenRatio, NEARPLANE, FARPLANE);
 
         glUniformMatrix4fv(g_view_uniform,       1, GL_FALSE, glm::value_ptr(view));
         glUniformMatrix4fv(g_projection_uniform, 1, GL_FALSE, glm::value_ptr(projection));
@@ -362,7 +363,7 @@ int main(int argc, char* argv[])
         glm::mat4 enemieModelMatrix =
                 Matrix_Translate(-15.0f, 0.0f, -10.0f)
                 * Matrix_Rotate_Y(PI / 4.0f)
-                * Matrix_Scale(0.1f, 0.1f, 0.1f);
+                * SOLDIERS_SCALE;
         DrawModel("enemie", enemieModelMatrix); // <-- Renderização direta e rápida
 
         glm::mat4 enemieGunMatrix =
@@ -401,151 +402,6 @@ int main(int argc, char* argv[])
     return 0;
 }
 
-// =========================================================
-// Carrega uma textura PNG e retorna o GLuint, usando cache
-// =========================================================
-// =========================================================
-// Carrega uma textura PNG/TGA/JPG e retorna o GLuint, usando cache
-// =========================================================
-GLuint LoadTextureImage(const char* filename)
-{
-    // Cache: não recarrega a mesma imagem
-    auto it = g_LoadedTextures.find(std::string(filename));
-    if (it != g_LoadedTextures.end())
-        return it->second;
-
-    printf("Carregando textura \"%s\"... ", filename);
-
-    stbi_set_flip_vertically_on_load(true);
-    int width, height, channels;
-    
-    // MUDANÇA 1: Usar '0' em vez de '4' para que a biblioteca detecte os canais reais
-    unsigned char *data = stbi_load(filename, &width, &height, &channels, 0);
-
-    if (data == NULL)
-    {
-        fprintf(stderr, "AVISO: Não foi possível abrir \"%s\".\n", filename);
-        g_LoadedTextures[std::string(filename)] = 0;
-        return 0;
-    }
-
-    printf("OK (%dx%d, %d canais).\n", width, height, channels);
-
-    GLuint texture_id;
-    glGenTextures(1, &texture_id);
-    glBindTexture(GL_TEXTURE_2D, texture_id);
-
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-    // MUDANÇA 2: Configurar o OpenGL de acordo com a quantidade de canais
-    GLenum format = GL_RGB;
-    if (channels == 4)
-        format = GL_RGBA;
-    else if (channels == 1)
-        format = GL_RED;
-
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    
-    // MUDANÇA 3: Passar o formato dinâmico aqui
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8_ALPHA8, width, height, 0, format, GL_UNSIGNED_BYTE, data);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glBindTexture(GL_TEXTURE_2D, 0);
-
-    stbi_image_free(data);
-
-    g_LoadedTextures[std::string(filename)] = texture_id;
-    return texture_id;
-}
-
-// =========================================================
-// Carrega texturas de todos os materiais do modelo
-// Retorna o índice de slot para um dado nome de material
-// =========================================================
-void LoadMaterialTextures(ObjModel* model, const char* basepath)
-{
-
-    std::string base(basepath ? basepath : "");
-
-    for (size_t i = 0; i < model->materials.size(); ++i)
-    {
-        const tinyobj::material_t& mat = model->materials[i];
-        const std::string& matname = mat.name;
-
-        // Já processamos este material?
-        if (g_MaterialTextureIndex.count(matname))
-            continue;
-
-        if (mat.diffuse_texname.empty())
-        {
-            // Sem textura: índice -1
-            g_MaterialTextureIndex[matname] = -1;
-            continue;
-        }
-
-        // Monta o caminho completo para o arquivo de textura
-        std::string texpath = base + mat.diffuse_texname;
-
-        GLuint tex_id = LoadTextureImage(texpath.c_str());
-
-        if (tex_id == 0)
-        {
-            // Tenta com extensão em minúsculas caso falhe
-            std::string lower = texpath;
-            for (auto& c : lower) c = tolower(c);
-            tex_id = LoadTextureImage(lower.c_str());
-        }
-
-        if (tex_id == 0)
-        {
-            g_MaterialTextureIndex[matname] = -1;
-            continue;
-        }
-
-        // Atribui ao próximo slot disponível
-        int slot = (int)g_TextureSlots.size();
-        if (slot >= MAX_TEXTURES)
-        {
-            fprintf(stderr, "AVISO: Limite de %d texturas atingido. Material '%s' sem textura.\n",
-                    MAX_TEXTURES, matname.c_str());
-            g_MaterialTextureIndex[matname] = -1;
-            continue;
-        }
-
-        g_TextureSlots.push_back(tex_id);
-        g_MaterialTextureIndex[matname] = slot;
-        printf("Material '%s' -> slot %d (tex_id=%u)\n", matname.c_str(), slot, tex_id);
-    }
-}
-
-// =========================================================
-// Ativa todas as texturas nos slots correspondentes
-// Deve ser chamado após UseProgram e antes do draw loop
-// =========================================================
-void BindAllTextures(GLuint program_id)
-{
-    // Reserva a unidade 31 para o text rendering
-    // Usamos unidades 0..N-1 para nossas texturas
-    for (int i = 0; i < (int)g_TextureSlots.size() && i < MAX_TEXTURES; ++i)
-    {
-        glActiveTexture(GL_TEXTURE0 + i);
-        glBindTexture(GL_TEXTURE_2D, g_TextureSlots[i]);
-    }
-
-    // Passa o array de samplers para o shader
-    // (precisa passar os índices das unidades de textura, não os IDs)
-    int samplers[MAX_TEXTURES];
-    for (int i = 0; i < MAX_TEXTURES; ++i)
-        samplers[i] = i;
-
-    GLint loc = glGetUniformLocation(program_id, "texture_map");
-    if (loc >= 0)
-        glUniform1iv(loc, MAX_TEXTURES, samplers);
-}
-
-
 void LoadShadersFromFiles()
 {
     GLuint vertex_shader_id   = LoadShader_Vertex("../../src/shader_vertex.glsl");
@@ -567,98 +423,6 @@ void LoadShadersFromFiles()
 
     glUseProgram(g_GpuProgramID);
     glUseProgram(0);
-}
-
-void ComputeNormals(ObjModel* model)
-{
-    if (!model->attrib.normals.empty())
-        return;
-
-    std::set<unsigned int> sgroup_ids;
-    for (size_t shape = 0; shape < model->shapes.size(); ++shape)
-    {
-        size_t num_triangles = model->shapes[shape].mesh.num_face_vertices.size();
-        assert(model->shapes[shape].mesh.smoothing_group_ids.size() == num_triangles);
-        for (size_t triangle = 0; triangle < num_triangles; ++triangle)
-        {
-            assert(model->shapes[shape].mesh.num_face_vertices[triangle] == 3);
-            unsigned int sgroup = model->shapes[shape].mesh.smoothing_group_ids[triangle];
-            sgroup_ids.insert(sgroup);
-        }
-    }
-
-    size_t num_vertices = model->attrib.vertices.size() / 3;
-    model->attrib.normals.reserve(3 * num_vertices);
-
-    for (const unsigned int& sgroup : sgroup_ids)
-    {
-        std::vector<int>        num_triangles_per_vertex(num_vertices, 0);
-        std::vector<glm::vec4>  vertex_normals(num_vertices, glm::vec4(0.0f, 0.0f, 0.0f, 0.0f));
-
-        for (size_t shape = 0; shape < model->shapes.size(); ++shape)
-        {
-            size_t num_triangles = model->shapes[shape].mesh.num_face_vertices.size();
-            for (size_t triangle = 0; triangle < num_triangles; ++triangle)
-            {
-                if (model->shapes[shape].mesh.smoothing_group_ids[triangle] != sgroup)
-                    continue;
-
-                glm::vec4 vertices[3];
-                for (size_t vertex = 0; vertex < 3; ++vertex)
-                {
-                    tinyobj::index_t idx = model->shapes[shape].mesh.indices[3*triangle + vertex];
-                    vertices[vertex] = glm::vec4(
-                        model->attrib.vertices[3*idx.vertex_index + 0],
-                        model->attrib.vertices[3*idx.vertex_index + 1],
-                        model->attrib.vertices[3*idx.vertex_index + 2],
-                        1.0f
-                    );
-                }
-
-                glm::vec4 n = crossproduct(vertices[1] - vertices[0], vertices[2] - vertices[0]);
-
-                for (size_t vertex = 0; vertex < 3; ++vertex)
-                {
-                    tinyobj::index_t idx = model->shapes[shape].mesh.indices[3*triangle + vertex];
-                    num_triangles_per_vertex[idx.vertex_index] += 1;
-                    vertex_normals[idx.vertex_index] += n;
-                }
-            }
-        }
-
-        std::vector<size_t> normal_indices(num_vertices, 0);
-        for (size_t vi = 0; vi < vertex_normals.size(); ++vi)
-        {
-            if (num_triangles_per_vertex[vi] == 0)
-                continue;
-
-            glm::vec4 n = vertex_normals[vi] / (float)num_triangles_per_vertex[vi];
-            n /= norm(n);
-
-            model->attrib.normals.push_back(n.x);
-            model->attrib.normals.push_back(n.y);
-            model->attrib.normals.push_back(n.z);
-
-            normal_indices[vi] = (model->attrib.normals.size() / 3) - 1;
-        }
-
-        for (size_t shape = 0; shape < model->shapes.size(); ++shape)
-        {
-            size_t num_triangles = model->shapes[shape].mesh.num_face_vertices.size();
-            for (size_t triangle = 0; triangle < num_triangles; ++triangle)
-            {
-                if (model->shapes[shape].mesh.smoothing_group_ids[triangle] != sgroup)
-                    continue;
-
-                for (size_t vertex = 0; vertex < 3; ++vertex)
-                {
-                    tinyobj::index_t idx = model->shapes[shape].mesh.indices[3*triangle + vertex];
-                    model->shapes[shape].mesh.indices[3*triangle + vertex].normal_index =
-                        normal_indices[idx.vertex_index];
-                }
-            }
-        }
-    }
 }
 
 GLuint LoadShader_Vertex(const char* filename)
