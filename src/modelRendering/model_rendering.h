@@ -88,5 +88,28 @@ struct ModelAsset
     std::vector<SceneObject> parts;
 };
 
+struct ModelPaths {
+private:
+    std::string name;
+    std::string modelPath;
+    std::string texturePath;
+    bool useTexture;
+
+public:
+    // Construtor atualizado
+    ModelPaths(const std::string& n, const std::string& mPath, const std::string& tPath, bool useTex)
+        : name(n), modelPath(mPath), texturePath(tPath), useTexture(useTex) 
+    {
+    }
+
+    const std::string& GetName() const { return name; }
+    const std::string& GetModelPath() const { return modelPath; }
+    const std::string& GetTexturePath() const { return texturePath; }
+    bool GetUseTexture() const { return useTexture; }
+};
+
 ModelAsset BuildModelAsset(ObjModel* model);
 void DrawModel(const std::string& model_name, glm::mat4 model_matrix);
+void LoadPathsCSV(const std::string& file_path);
+void ComputeNormals(ObjModel* model);
+void LoadModelsFromCSV(const std::string& file_path);

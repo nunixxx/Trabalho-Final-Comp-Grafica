@@ -1,17 +1,118 @@
 #include "model_rendering.h"
+#include "..\textureRendering\texture_rendering.h"
 
 #include <map>
 #include <algorithm>
 #include <glm/gtc/type_ptr.hpp>
 #include <tiny_obj_loader.h>
 
+#include <iostream>
+#include <fstream>
+#include <sstream>
+#include <string>
+#include <set>
+#include <matrices.h>
+
 extern std::map<std::string, ModelAsset> g_ModelRegistry;
 extern std::map<std::string, int>        g_MaterialTextureIndex;
+extern std::map<std::string, ModelPaths> g_PathsRegistry;
 extern GLint g_model_uniform;
 extern GLint g_bbox_min_uniform;
 extern GLint g_bbox_max_uniform;
 extern GLint g_texture_index_uniform;
 extern GLint g_has_texture_uniform;
+
+void ComputeNormals(ObjModel* model)
+{
+    if (!model->attrib.normals.empty())
+        return;
+
+    std::set<unsigned int> sgroup_ids;
+    for (size_t shape = 0; shape < model->shapes.size(); ++shape)
+    {
+        size_t num_triangles = model->shapes[shape].mesh.num_face_vertices.size();
+        assert(model->shapes[shape].mesh.smoothing_group_ids.size() == num_triangles);
+        for (size_t triangle = 0; triangle < num_triangles; ++triangle)
+        {
+            assert(model->shapes[shape].mesh.num_face_vertices[triangle] == 3);
+            unsigned int sgroup = model->shapes[shape].mesh.smoothing_group_ids[triangle];
+            sgroup_ids.insert(sgroup);
+        }
+    }
+
+    size_t num_vertices = model->attrib.vertices.size() / 3;
+    model->attrib.normals.reserve(3 * num_vertices);
+
+    for (const unsigned int& sgroup : sgroup_ids)
+    {
+        std::vector<int>        num_triangles_per_vertex(num_vertices, 0);
+        std::vector<glm::vec4>  vertex_normals(num_vertices, glm::vec4(0.0f, 0.0f, 0.0f, 0.0f));
+
+        for (size_t shape = 0; shape < model->shapes.size(); ++shape)
+        {
+            size_t num_triangles = model->shapes[shape].mesh.num_face_vertices.size();
+            for (size_t triangle = 0; triangle < num_triangles; ++triangle)
+            {
+                if (model->shapes[shape].mesh.smoothing_group_ids[triangle] != sgroup)
+                    continue;
+
+                glm::vec4 vertices[3];
+                for (size_t vertex = 0; vertex < 3; ++vertex)
+                {
+                    tinyobj::index_t idx = model->shapes[shape].mesh.indices[3*triangle + vertex];
+                    vertices[vertex] = glm::vec4(
+                        model->attrib.vertices[3*idx.vertex_index + 0],
+                        model->attrib.vertices[3*idx.vertex_index + 1],
+                        model->attrib.vertices[3*idx.vertex_index + 2],
+                        1.0f
+                    );
+                }
+
+                glm::vec4 n = crossproduct(vertices[1] - vertices[0], vertices[2] - vertices[0]);
+
+                for (size_t vertex = 0; vertex < 3; ++vertex)
+                {
+                    tinyobj::index_t idx = model->shapes[shape].mesh.indices[3*triangle + vertex];
+                    num_triangles_per_vertex[idx.vertex_index] += 1;
+                    vertex_normals[idx.vertex_index] += n;
+                }
+            }
+        }
+
+        std::vector<size_t> normal_indices(num_vertices, 0);
+        for (size_t vi = 0; vi < vertex_normals.size(); ++vi)
+        {
+            if (num_triangles_per_vertex[vi] == 0)
+                continue;
+
+            glm::vec4 n = vertex_normals[vi] / (float)num_triangles_per_vertex[vi];
+            n /= norm(n);
+
+            model->attrib.normals.push_back(n.x);
+            model->attrib.normals.push_back(n.y);
+            model->attrib.normals.push_back(n.z);
+
+            normal_indices[vi] = (model->attrib.normals.size() / 3) - 1;
+        }
+
+        for (size_t shape = 0; shape < model->shapes.size(); ++shape)
+        {
+            size_t num_triangles = model->shapes[shape].mesh.num_face_vertices.size();
+            for (size_t triangle = 0; triangle < num_triangles; ++triangle)
+            {
+                if (model->shapes[shape].mesh.smoothing_group_ids[triangle] != sgroup)
+                    continue;
+
+                for (size_t vertex = 0; vertex < 3; ++vertex)
+                {
+                    tinyobj::index_t idx = model->shapes[shape].mesh.indices[3*triangle + vertex];
+                    model->shapes[shape].mesh.indices[3*triangle + vertex].normal_index =
+                        normal_indices[idx.vertex_index];
+                }
+            }
+        }
+    }
+}
 
 ModelAsset BuildModelAsset(ObjModel* model)
 {
@@ -196,5 +297,85 @@ void DrawModel(const std::string& model_name, glm::mat4 model_matrix)
         glDrawElements(obj.rendering_mode, (GLsizei)obj.num_indices,
             GL_UNSIGNED_INT, (void*)(obj.first_index * sizeof(GLuint)));
         glBindVertexArray(0);
+    }
+}
+
+void LoadPathsCSV(const std::string& file_path) {
+    std::ifstream file(file_path);
+    if (!file.is_open()) return;
+
+    std::string line;
+    bool isFirstLine = true;
+    
+    while (std::getline(file, line)) {
+        if (line.empty()) continue;
+        if (isFirstLine) { isFirstLine = false; continue; }
+
+        std::stringstream ss(line);
+        std::string name, modelPath, texturePath, useTexStr;
+
+        if (std::getline(ss, name, ',') &&
+            std::getline(ss, modelPath, ',') &&
+            std::getline(ss, texturePath, ',') &&
+            std::getline(ss, useTexStr, ',')) 
+        {
+            if (!useTexStr.empty() && useTexStr.back() == '\r') {
+                useTexStr.pop_back();
+            }
+
+            bool useTexture = (useTexStr == "true" || useTexStr == "1");
+
+            g_PathsRegistry.emplace(name, ModelPaths(name, "../../data/" + modelPath, "../../data/" + texturePath, useTexture));
+        }
+    }
+}
+
+void LoadModelsFromCSV(const std::string& file_path) {
+    std::ifstream file(file_path);
+    if (!file.is_open()) {
+        std::cerr << "Erro: Nao foi possivel abrir " << file_path << "\n";
+        return;
+    }
+
+    std::string line;
+    bool isFirstLine = true;
+    
+    while (std::getline(file, line)) {
+        if (line.empty()) continue;
+        if (isFirstLine) { isFirstLine = false; continue; }
+
+        std::stringstream ss(line);
+        std::string name, modelPath, texturePath, useTexStr;
+
+        if (std::getline(ss, name, ',') &&
+            std::getline(ss, modelPath, ',') &&
+            std::getline(ss, texturePath, ',') &&
+            std::getline(ss, useTexStr, ',')) 
+        {
+            // Limpa o '\r' e converte para booleano
+            if (!useTexStr.empty() && useTexStr.back() == '\r') useTexStr.pop_back();
+            bool useTexture = (useTexStr == "true" || useTexStr == "1");
+
+            // Constrói as strings completas
+            std::string fullModelPath = "../../data/" + modelPath;
+            std::string fullTexturePath = "../../data/" + texturePath;
+
+            printf("\n--- Construindo asset direto do CSV: %s ---\n", name.c_str());
+            
+            // ==========================================
+            // CARREGA O MODELO IMEDIATAMENTE AQUI!
+            // ==========================================
+            ObjModel tempModel(fullModelPath.c_str());
+            ComputeNormals(&tempModel);
+            
+            if (useTexture) {
+                LoadMaterialTextures(&tempModel, fullTexturePath.c_str());
+            } else {
+                printf("Textura desativada. Pulando...\n");
+            }
+            
+            // Salva direto no registro final da engine
+            g_ModelRegistry[name] = BuildModelAsset(&tempModel); 
+        }
     }
 }

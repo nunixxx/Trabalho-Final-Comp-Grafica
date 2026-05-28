@@ -1,13 +1,3 @@
-//     Universidade Federal do Rio Grande do Sul
-//             Instituto de Informática
-//       Departamento de Informática Aplicada
-//
-//    INF01047 Computação Gráfica e Visualização I
-//               Prof. Eduardo Gastal
-//
-//     CÓDIGO BASE PARA O TRABALHO FINAL
-//
-
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -18,6 +8,7 @@
 #include <string>
 #include <vector>
 #include <limits>
+#include <memory>
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
@@ -39,17 +30,19 @@
 #include "modelRendering/model_rendering.h"
 #include "collision/collision.h"
 
-// Antiga declaração de ObjModel
+#include "constants.h"
+#include "textureRendering/texture_rendering.h"
+
+#include "classes/enemy/enemy.h"
+#include "classes/player/player.h"
+#include "classes/objects/health_pack.h"
+#include "classes/objects/world_object.h"
+#include "classes/objects/gun.h"
 
 void LoadShadersFromFiles();
-void ComputeNormals(ObjModel* model);
-void BindAllTextures(GLuint program_id);
-GLuint LoadTextureImage(const char* filename);
 GLuint LoadShader_Vertex(const char* filename);
 GLuint LoadShader_Fragment(const char* filename);
 void LoadShader(const char* filename, GLuint shader_id);
-void LoadMaterialTextures(ObjModel* model, const char* basepath);
-void LoadObjModelAsset(const char* name, const char* obj_path, const char* texture_basepath = nullptr);
 GLuint CreateGpuProgram(GLuint vertex_shader_id, GLuint fragment_shader_id);
 
 
@@ -66,7 +59,11 @@ void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
 void CursorPosCallback(GLFWwindow* window, double xpos, double ypos);
 void ScrollCallback(GLFWwindow* window, double xoffset, double yoffset);
 
-
+// Instancia de Objetos
+std::unique_ptr<Player> g_Player;
+std::vector<std::unique_ptr<Enemy>> g_Enemies;
+std::vector<std::unique_ptr<HealthPack>> g_HealthPacks;
+std::vector<std::unique_ptr<Gun>> g_Guns;
 // =========================================================
 // Sistema de texturas
 // =========================================================
@@ -77,62 +74,6 @@ std::map<std::string, GLuint> g_LoadedTextures;
 // Lista ordenada de GLuints para bind no shader (slot 0..N)
 std::vector<GLuint> g_TextureSlots;
 
-struct PlayerInfo
-{
-    glm::vec4 position;
-    float yaw;
-};
-
-struct FreeCamInfo
-{
-    glm::vec4 position;
-    float yaw;
-    float pitch;
-};
-
-struct HealthPack {
-    glm::vec4 position;
-    bool active;
-    float scale;
-};
-
-std::vector<HealthPack> healthPacks;
-
-// Número máximo de texturas suportado pelo shader
-#define MAX_TEXTURES 64
-#define PI 3.141592f
-#define FREECAM TRUE
-#define LOOKAT FALSE
-#define PLAYER_HALF_W 0.3f
-#define PLAYER_HEIGHT 1.0f
-
-float g_ScreenRatio = 1.0f;
-
-bool g_LeftMouseButtonPressed = false;
-bool g_RightMouseButtonPressed = false;
-bool g_MiddleMouseButtonPressed = false;
-
-float g_CameraTheta = 0.0f;
-float g_CameraPhi = 0.4f;
-float g_CameraDistance = 5.0f;
-
-bool g_CamMode = LOOKAT;
-
-CollisionMesh g_CollisionMesh;
-
-//-38.08f, 0.74f, -161.84f, 1.0f DENTRO DO MAPA
-//0.0f, 0.0f, -1.0f, 1.0f CORDENADAS (0,0)
-PlayerInfo g_Player = { glm::vec4(-38.08f, 0.74f, -161.84f, 1.0f), -1.57f };
-
-FreeCamInfo g_FreeCam = { g_Player.position, g_Player.yaw, 0.0f };
-
-FreeCamInfo g_FreeCamBackup = g_FreeCam;
-
-glm::vec4 g_LookAtTarget = g_Player.position + glm::vec4(0.0f, 0.8f, 0.0f, 0.0f);
-
-bool g_ShowInfoText = true;
-
-GLuint g_GpuProgramID = 0;
 GLint g_model_uniform;
 GLint g_view_uniform;
 GLint g_projection_uniform;
@@ -142,8 +83,21 @@ GLint g_bbox_max_uniform;
 GLint g_texture_index_uniform;
 GLint g_has_texture_uniform;
 
+float g_ScreenRatio = 1.0f;
+
+bool g_LeftMouseButtonPressed = false;
+bool g_RightMouseButtonPressed = false;
+bool g_MiddleMouseButtonPressed = false;
+
+CollisionMesh g_CollisionMesh;
+
+bool g_ShowInfoText = true;
+
+GLuint g_GpuProgramID = 0;
+
 // O registro que guarda a geometria pronta para ser instanciada
 std::map<std::string, ModelAsset> g_ModelRegistry;
+std::map<std::string, ModelPaths> g_PathsRegistry;
 
 int main(int argc, char* argv[])
 {
@@ -159,14 +113,10 @@ int main(int argc, char* argv[])
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 
-    #ifdef __APPLE__
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-    #endif
-
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
     GLFWwindow* window;
-    window = glfwCreateWindow(800, 600, "INF01047 - Doom E1M1", NULL, NULL);
+    window = glfwCreateWindow(WINDOW_SIZE_X, WINDOW_SIZE_Y, "INF01047 - Doom E1M1", NULL, NULL);
     if (!window)
     {
         glfwTerminate();
@@ -183,7 +133,7 @@ int main(int argc, char* argv[])
     gladLoadGLLoader((GLADloadproc) glfwGetProcAddress);
 
     glfwSetFramebufferSizeCallback(window, FramebufferSizeCallback);
-    FramebufferSizeCallback(window, 800, 600);
+    FramebufferSizeCallback(window, WINDOW_SIZE_X, WINDOW_SIZE_Y);
 
     const GLubyte *vendor      = glGetString(GL_VENDOR);
     const GLubyte *renderer    = glGetString(GL_RENDERER);
@@ -194,52 +144,45 @@ int main(int argc, char* argv[])
 
     LoadShadersFromFiles();
 
-    // =========================================================
-    // Carrega o jogador
-    ObjModel soldierModel("../../data/Soldier/model.obj");
-    ComputeNormals(&soldierModel);
-    LoadMaterialTextures(&soldierModel, "../../data/Soldier/");
-    g_ModelRegistry["soldier"] = BuildModelAsset(&soldierModel); // Renderiza
+    LoadModelsFromCSV(PATH_CSV);
 
-    // =========================================================
-    // Carrega o mapa Doom E1M1
-    ObjModel mapmodel("../../data/Map/Doom_E1M1.obj");
-    ComputeNormals(&mapmodel);
-    //LoadMaterialTextures(&mapmodel, "../../data/Map/");
-    g_ModelRegistry["map"] = BuildModelAsset(&mapmodel); // Renderiza
-
-    // =========================================================
-    // Carrega o inimigo
-    ObjModel enimeModel("../../data/Enime/Model.obj");
-    ComputeNormals(&enimeModel);
-    LoadMaterialTextures(&enimeModel, "../../data/Enime/");
-    g_ModelRegistry["enime"] = BuildModelAsset(&enimeModel); // Renderiza
-
-    
-    // =========================================================
-    // Carrega arma do inimigo
-    ObjModel enimeGunModel("../../data/SoldierGun/gun_marvin.obj");
-    ComputeNormals(&enimeGunModel   );
-    LoadMaterialTextures(&enimeGunModel , "../../data/SoldierGun/");
-    g_ModelRegistry["enimeGun"] = BuildModelAsset(&enimeGunModel  ); // Renderiza
-
-    // =========================================================
-    // Carrega shotgun do jogador
-    ObjModel shotgunModel("../../data/Shotgun/shotgunLoad.obj");
-    ComputeNormals(&shotgunModel);
-    LoadMaterialTextures(&shotgunModel, "../../data/Shotgun/");
-    g_ModelRegistry["shotgun"] = BuildModelAsset(&shotgunModel); // Renderiza
-
-    ObjModel healthPackModel("../../data/Healthpack/HealthpackTextured.Obj");
-    ComputeNormals(&healthPackModel);
-    LoadMaterialTextures(&healthPackModel, "../../data/Healthpack/");
-    g_ModelRegistry["healthpack"] = BuildModelAsset(&healthPackModel);
-
-    // Adiciona dois health packs de teste na cena:
-    healthPacks.push_back({glm::vec4( 5.0f, -1.0f,  5.0f, 1.0f), true, 0.5f}); // Posição 1
-    healthPacks.push_back({glm::vec4(-5.0f, -1.0f, -5.0f, 1.0f), true, 0.5f}); // Posição 2
+    printf("\nTodos os modelos foram carregados com sucesso!\n\n");
 
     g_CollisionMesh = BuildCollisionMesh(g_ModelRegistry["map"], 0.05f);
+
+    // Adiciona dois health packs de teste na cena:
+    g_HealthPacks.push_back(std::make_unique<HealthPack>(glm::vec4( 5.0f, -1.0f,  5.0f, 1.0f), 0.5f));
+    g_HealthPacks.push_back(std::make_unique<HealthPack>(glm::vec4(-5.0f, -1.0f, -5.0f, 1.0f), 0.5f));
+
+    // Adiciona duas armas de teste na cena:
+    g_Guns.push_back(std::make_unique<ShotGun>(glm::vec4( -5.0f, 1.0f, -10.0f, 1.0f), 0.05f, 10, 50));
+    g_Guns.push_back(std::make_unique<Pistol>(glm::vec4(-10.0f, -1.0f, -10.0f, 1.0f), 2.0f, 15, 50));
+
+    // Inimigo com rota manual (4 pontos de controle explícitos)
+    g_Enemies.push_back(std::make_unique<Enemy>(
+        glm::vec4(-0.0f, 0.0f, -15.0f, 1.0f),  // posição inicial
+        PI / 4.0f,                                // yaw inicial
+        std::array<glm::vec4, 4>{
+            glm::vec4(-15.0f, 0.0f, -10.0f, 1.0f),
+            glm::vec4( -5.0f, 0.0f, -10.0f, 1.0f),
+            glm::vec4( -5.0f, 0.0f,  -5.0f, 1.0f),
+            glm::vec4(-15.0f, 0.0f,  -5.0f, 1.0f)
+        }
+    ));
+
+    // Inimigo com rota gerada automaticamente (construtor simples)
+    g_Enemies.push_back(std::make_unique<Enemy>(
+        glm::vec4(-10.0f, 0.0f, -15.0f, 1.0f),  // posição inicial
+        0.0f,                                     // yaw inicial
+        4.0f                                     // raio do patrol
+    ));
+
+    g_Player = std::make_unique<Player>(
+        window,
+        &g_CollisionMesh,
+        PLAYER_INITIAL_POSITION,
+        PLAYER_INITIAL_YAW
+    );
     
     TextRendering_Init();
 
@@ -262,99 +205,35 @@ int main(int argc, char* argv[])
 
         glUseProgram(g_GpuProgramID);
 
-        glm::vec4 camera_position_c;
-        glm::vec4 camera_view_vector;
-        glm::vec4 camera_up_vector = glm::vec4(0.0f, 1.0f, 0.0f, 0.0f);
+        // Calcula deltaTime uma vez por frame
+        static float lastTime = (float)glfwGetTime();
+        float currentTime = (float)glfwGetTime();
+        float deltaTime   = currentTime - lastTime;
+        lastTime          = currentTime;
 
-        if (g_CamMode == LOOKAT)
-        {
-            float r = g_CameraDistance;
-            float y = r * sin(g_CameraPhi);
+        // Atualiza o player (input + movimento + câmera)
+        g_Player->update(deltaTime);
 
-            float behindAngle = g_Player.yaw + PI;  // direção de trás do soldado
-            float z = r * cos(g_CameraPhi) * cos(behindAngle);
-            float x = r * cos(g_CameraPhi) * sin(behindAngle);
-
-            glm::vec4 lookat = g_LookAtTarget;
-            camera_position_c  = lookat + glm::vec4(x, y, z, 0.0f);
-            camera_view_vector = lookat - camera_position_c;
-
-            const float PLAYER_RADIUS = 0.3f;
-            const float MOVE_SPEED    = 0.05f;
-
-            glm::vec3 front(
-                cos(g_Player.yaw),
-                0.0f,
-                sin(g_Player.yaw)
-            );
-            glm::vec3 right = glm::vec3(front.z, 0.0f, -front.x); // perpendicular no plano XZ
-
-            glm::vec3 desiredPos(g_Player.position.x,
-                                g_Player.position.y,
-                                g_Player.position.z);
-
-            if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) desiredPos += right * MOVE_SPEED;
-            if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) desiredPos -= right * MOVE_SPEED;
-            if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) desiredPos -= front * MOVE_SPEED;
-            if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) desiredPos += front * MOVE_SPEED;
-
-            // Resolução de colisão por triângulos (substitui o AABB antigo)
-            glm::vec3 resolvedPos = ResolvePlayerCollision(
-                g_CollisionMesh,
-                desiredPos,
-                PLAYER_RADIUS,
-                PLAYER_HEIGHT
-            );
-
-            g_Player.position = glm::vec4(resolvedPos.x, resolvedPos.y, resolvedPos.z, 1.0f);
-
-            // Atualiza alvo da câmera LookAt
-            g_LookAtTarget = g_Player.position + glm::vec4(0.0f, 0.8f, 0.0f, 0.0f);
-
-            glm::mat4 soldierModelMatrix =
-                Matrix_Translate(g_Player.position.x, g_Player.position.y, g_Player.position.z)
-                * Matrix_Rotate_Y(g_Player.yaw)
-                * Matrix_Scale(0.1f, 0.1f, 0.1f);
-
-            DrawModel("soldier", soldierModelMatrix); // <-- Desenha o soldado usando a mesma função
-        }
-        if(g_CamMode == FREECAM)
-        {
-            glm::vec4 front;
-            front.x = cos(g_FreeCam.pitch) * cos(g_FreeCam.yaw);
-            front.y = sin(g_FreeCam.pitch);
-            front.z = cos(g_FreeCam.pitch) * sin(g_FreeCam.yaw);
-            front.w = 0.0f;
-
-            camera_position_c  = g_FreeCam.position;
-            camera_view_vector = front;
-
-            float cameraSpeed = 0.1f;
-
-            glm::vec4 right = crossproduct(front, glm::vec4(0, 1, 0, 0));
-            right = normalize(right);
-
-            if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-                g_FreeCam.position += front * cameraSpeed;
-            if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-                g_FreeCam.position -= front * cameraSpeed;
-            if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-                g_FreeCam.position -= right * cameraSpeed;
-            if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-                g_FreeCam.position += right * cameraSpeed;
-        }
-
+        // Monta view/projection com os vetores expostos pelo Player
         glm::mat4 view = Matrix_Camera_View(
-            camera_position_c,
-            camera_view_vector,
-            camera_up_vector
+            g_Player->cameraPosition,
+            g_Player->cameraViewVector,
+            CAMERA_UP_VECTOR
         );
 
-        float nearplane = -0.1f;
-        float farplane  = -200.0f;
-
         float field_of_view = PI / 3.0f;
-        glm::mat4 projection = Matrix_Perspective(field_of_view, g_ScreenRatio, nearplane, farplane);
+        glm::mat4 projection = Matrix_Perspective(
+            field_of_view,
+            g_ScreenRatio,
+            NEARPLANE,
+            FARPLANE
+        );
+
+        glUniformMatrix4fv(g_view_uniform,       1, GL_FALSE, glm::value_ptr(view));
+        glUniformMatrix4fv(g_projection_uniform, 1, GL_FALSE, glm::value_ptr(projection));
+
+        // Renderiza o personagem (em FreeCam não desenha nada — já tratado dentro do Player)
+        g_Player->draw();
 
         glUniformMatrix4fv(g_view_uniform,       1, GL_FALSE, glm::value_ptr(view));
         glUniformMatrix4fv(g_projection_uniform, 1, GL_FALSE, glm::value_ptr(projection));
@@ -365,41 +244,24 @@ int main(int argc, char* argv[])
         glm::mat4 mapModelMatrix = Matrix_Scale(0.05f, 0.05f, 0.05f);
         DrawModel("map", mapModelMatrix); // <-- Renderização direta e rápida
 
-        // =========================================================
-        // Renderiza o inimigo
-        glm::mat4 enimeModelMatrix =
-                Matrix_Translate(-15.0f, 0.0f, -10.0f)
-                * Matrix_Rotate_Y(PI / 4.0f)
-                * Matrix_Scale(0.1f, 0.1f, 0.1f);
-        DrawModel("enime", enimeModelMatrix); // <-- Renderização direta e rápida
-
-        glm::mat4 enimeGunMatrix =
-                Matrix_Translate(-10.0f, 0.0f, -10.0f)
-                * Matrix_Rotate_Y(PI / 4.0f)
-                * Matrix_Scale(2.0f, 2.0f, 2.0f);
-        DrawModel("enimeGun", enimeGunMatrix); // <-- Renderização direta e rápida
-
-        glm::mat4 shotgunMatrix =
-                Matrix_Translate(-5.0f, 0.0f, -10.0f)
-                * Matrix_Rotate_Y(PI / 4.0f)
-                * Matrix_Scale(0.05f, 0.05f, 0.05f);
-        DrawModel("shotgun", shotgunMatrix); // <-- Renderização direta e rápida
-
-        float current_time = (float)glfwGetTime();
-        float healthpack_angle = current_time * 1.5f; // Multiplicador define a velocidade do giro
-
-        for (size_t i = 0; i < healthPacks.size(); i++)
+        for (auto& enemy : g_Enemies)
         {
-            if (healthPacks[i].active)
-            {
-                glm::mat4 hpModelMatrix = 
-                      Matrix_Translate(healthPacks[i].position.x, healthPacks[i].position.y, healthPacks[i].position.z)
-                    * Matrix_Rotate_Y(healthpack_angle)
-                    * Matrix_Scale(healthPacks[i].scale, healthPacks[i].scale, healthPacks[i].scale);
-
-                DrawModel("healthpack", hpModelMatrix); 
-            }
+            enemy->update(deltaTime, g_Player.get());
+            enemy->draw();
         }
+
+        for (auto& gun : g_Guns)
+        {
+            gun->update(deltaTime, g_Player.get());
+            gun->draw();
+        }
+
+        for (auto& obj : g_HealthPacks)
+        {
+            obj->update(deltaTime, g_Player.get());
+            obj->draw();
+        }
+        TextRendering_ShowFramesPerSecond(window);
 
         glfwSwapBuffers(window);
         glfwPollEvents();
@@ -408,150 +270,6 @@ int main(int argc, char* argv[])
     glfwTerminate();
     return 0;
 }
-
-// =========================================================
-// Carrega uma textura PNG e retorna o GLuint, usando cache
-// =========================================================
-// =========================================================
-// Carrega uma textura PNG/TGA/JPG e retorna o GLuint, usando cache
-// =========================================================
-GLuint LoadTextureImage(const char* filename)
-{
-    // Cache: não recarrega a mesma imagem
-    auto it = g_LoadedTextures.find(std::string(filename));
-    if (it != g_LoadedTextures.end())
-        return it->second;
-
-    printf("Carregando textura \"%s\"... ", filename);
-
-    stbi_set_flip_vertically_on_load(true);
-    int width, height, channels;
-    
-    // MUDANÇA 1: Usar '0' em vez de '4' para que a biblioteca detecte os canais reais
-    unsigned char *data = stbi_load(filename, &width, &height, &channels, 0);
-
-    if (data == NULL)
-    {
-        fprintf(stderr, "AVISO: Não foi possível abrir \"%s\".\n", filename);
-        g_LoadedTextures[std::string(filename)] = 0;
-        return 0;
-    }
-
-    printf("OK (%dx%d, %d canais).\n", width, height, channels);
-
-    GLuint texture_id;
-    glGenTextures(1, &texture_id);
-    glBindTexture(GL_TEXTURE_2D, texture_id);
-
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-    // MUDANÇA 2: Configurar o OpenGL de acordo com a quantidade de canais
-    GLenum format = GL_RGB;
-    if (channels == 4)
-        format = GL_RGBA;
-    else if (channels == 1)
-        format = GL_RED;
-
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    
-    // MUDANÇA 3: Passar o formato dinâmico aqui
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8_ALPHA8, width, height, 0, format, GL_UNSIGNED_BYTE, data);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    glBindTexture(GL_TEXTURE_2D, 0);
-
-    stbi_image_free(data);
-
-    g_LoadedTextures[std::string(filename)] = texture_id;
-    return texture_id;
-}
-
-// =========================================================
-// Carrega texturas de todos os materiais do modelo
-// Retorna o índice de slot para um dado nome de material
-// =========================================================
-void LoadMaterialTextures(ObjModel* model, const char* basepath)
-{
-    std::string base(basepath ? basepath : "");
-
-    for (size_t i = 0; i < model->materials.size(); ++i)
-    {
-        const tinyobj::material_t& mat = model->materials[i];
-        const std::string& matname = mat.name;
-
-        // Já processamos este material?
-        if (g_MaterialTextureIndex.count(matname))
-            continue;
-
-        if (mat.diffuse_texname.empty())
-        {
-            // Sem textura: índice -1
-            g_MaterialTextureIndex[matname] = -1;
-            continue;
-        }
-
-        // Monta o caminho completo para o arquivo de textura
-        std::string texpath = base + mat.diffuse_texname;
-
-        GLuint tex_id = LoadTextureImage(texpath.c_str());
-
-        if (tex_id == 0)
-        {
-            // Tenta com extensão em minúsculas caso falhe
-            std::string lower = texpath;
-            for (auto& c : lower) c = tolower(c);
-            tex_id = LoadTextureImage(lower.c_str());
-        }
-
-        if (tex_id == 0)
-        {
-            g_MaterialTextureIndex[matname] = -1;
-            continue;
-        }
-
-        // Atribui ao próximo slot disponível
-        int slot = (int)g_TextureSlots.size();
-        if (slot >= MAX_TEXTURES)
-        {
-            fprintf(stderr, "AVISO: Limite de %d texturas atingido. Material '%s' sem textura.\n",
-                    MAX_TEXTURES, matname.c_str());
-            g_MaterialTextureIndex[matname] = -1;
-            continue;
-        }
-
-        g_TextureSlots.push_back(tex_id);
-        g_MaterialTextureIndex[matname] = slot;
-        printf("Material '%s' -> slot %d (tex_id=%u)\n", matname.c_str(), slot, tex_id);
-    }
-}
-
-// =========================================================
-// Ativa todas as texturas nos slots correspondentes
-// Deve ser chamado após UseProgram e antes do draw loop
-// =========================================================
-void BindAllTextures(GLuint program_id)
-{
-    // Reserva a unidade 31 para o text rendering
-    // Usamos unidades 0..N-1 para nossas texturas
-    for (int i = 0; i < (int)g_TextureSlots.size() && i < MAX_TEXTURES; ++i)
-    {
-        glActiveTexture(GL_TEXTURE0 + i);
-        glBindTexture(GL_TEXTURE_2D, g_TextureSlots[i]);
-    }
-
-    // Passa o array de samplers para o shader
-    // (precisa passar os índices das unidades de textura, não os IDs)
-    int samplers[MAX_TEXTURES];
-    for (int i = 0; i < MAX_TEXTURES; ++i)
-        samplers[i] = i;
-
-    GLint loc = glGetUniformLocation(program_id, "texture_map");
-    if (loc >= 0)
-        glUniform1iv(loc, MAX_TEXTURES, samplers);
-}
-
 
 void LoadShadersFromFiles()
 {
@@ -574,98 +292,6 @@ void LoadShadersFromFiles()
 
     glUseProgram(g_GpuProgramID);
     glUseProgram(0);
-}
-
-void ComputeNormals(ObjModel* model)
-{
-    if (!model->attrib.normals.empty())
-        return;
-
-    std::set<unsigned int> sgroup_ids;
-    for (size_t shape = 0; shape < model->shapes.size(); ++shape)
-    {
-        size_t num_triangles = model->shapes[shape].mesh.num_face_vertices.size();
-        assert(model->shapes[shape].mesh.smoothing_group_ids.size() == num_triangles);
-        for (size_t triangle = 0; triangle < num_triangles; ++triangle)
-        {
-            assert(model->shapes[shape].mesh.num_face_vertices[triangle] == 3);
-            unsigned int sgroup = model->shapes[shape].mesh.smoothing_group_ids[triangle];
-            sgroup_ids.insert(sgroup);
-        }
-    }
-
-    size_t num_vertices = model->attrib.vertices.size() / 3;
-    model->attrib.normals.reserve(3 * num_vertices);
-
-    for (const unsigned int& sgroup : sgroup_ids)
-    {
-        std::vector<int>        num_triangles_per_vertex(num_vertices, 0);
-        std::vector<glm::vec4>  vertex_normals(num_vertices, glm::vec4(0.0f, 0.0f, 0.0f, 0.0f));
-
-        for (size_t shape = 0; shape < model->shapes.size(); ++shape)
-        {
-            size_t num_triangles = model->shapes[shape].mesh.num_face_vertices.size();
-            for (size_t triangle = 0; triangle < num_triangles; ++triangle)
-            {
-                if (model->shapes[shape].mesh.smoothing_group_ids[triangle] != sgroup)
-                    continue;
-
-                glm::vec4 vertices[3];
-                for (size_t vertex = 0; vertex < 3; ++vertex)
-                {
-                    tinyobj::index_t idx = model->shapes[shape].mesh.indices[3*triangle + vertex];
-                    vertices[vertex] = glm::vec4(
-                        model->attrib.vertices[3*idx.vertex_index + 0],
-                        model->attrib.vertices[3*idx.vertex_index + 1],
-                        model->attrib.vertices[3*idx.vertex_index + 2],
-                        1.0f
-                    );
-                }
-
-                glm::vec4 n = crossproduct(vertices[1] - vertices[0], vertices[2] - vertices[0]);
-
-                for (size_t vertex = 0; vertex < 3; ++vertex)
-                {
-                    tinyobj::index_t idx = model->shapes[shape].mesh.indices[3*triangle + vertex];
-                    num_triangles_per_vertex[idx.vertex_index] += 1;
-                    vertex_normals[idx.vertex_index] += n;
-                }
-            }
-        }
-
-        std::vector<size_t> normal_indices(num_vertices, 0);
-        for (size_t vi = 0; vi < vertex_normals.size(); ++vi)
-        {
-            if (num_triangles_per_vertex[vi] == 0)
-                continue;
-
-            glm::vec4 n = vertex_normals[vi] / (float)num_triangles_per_vertex[vi];
-            n /= norm(n);
-
-            model->attrib.normals.push_back(n.x);
-            model->attrib.normals.push_back(n.y);
-            model->attrib.normals.push_back(n.z);
-
-            normal_indices[vi] = (model->attrib.normals.size() / 3) - 1;
-        }
-
-        for (size_t shape = 0; shape < model->shapes.size(); ++shape)
-        {
-            size_t num_triangles = model->shapes[shape].mesh.num_face_vertices.size();
-            for (size_t triangle = 0; triangle < num_triangles; ++triangle)
-            {
-                if (model->shapes[shape].mesh.smoothing_group_ids[triangle] != sgroup)
-                    continue;
-
-                for (size_t vertex = 0; vertex < 3; ++vertex)
-                {
-                    tinyobj::index_t idx = model->shapes[shape].mesh.indices[3*triangle + vertex];
-                    model->shapes[shape].mesh.indices[3*triangle + vertex].normal_index =
-                        normal_indices[idx.vertex_index];
-                }
-            }
-        }
-    }
 }
 
 GLuint LoadShader_Vertex(const char* filename)
@@ -793,47 +419,24 @@ void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
 
 void CursorPosCallback(GLFWwindow* window, double xpos, double ypos)
 {
-    if (g_LeftMouseButtonPressed && g_CamMode == LOOKAT)
-    {
-        float dx = xpos - g_LastCursorPosX;
-        float dy = ypos - g_LastCursorPosY;
+    if (!g_Player) return;
 
-        //g_CameraTheta -= 0.01f * dx;
-        g_Player.yaw -= 0.01f * dx;   // mouse gira o soldado
-        g_CameraPhi   += 0.01f * dy;
+    static double lastX = xpos, lastY = ypos;
+    float dx = (float)(xpos - lastX);
+    float dy = (float)(ypos - lastY);
+    lastX = xpos;
+    lastY = ypos;
 
-        float phimax =  PI / 2;
-        float phimin = -phimax;
-        if (g_CameraPhi > phimax) g_CameraPhi = phimax;
-        if (g_CameraPhi < phimin) g_CameraPhi = phimin;
-
-        g_LastCursorPosX = xpos;
-        g_LastCursorPosY = ypos;
-    }
-
-    if (g_CamMode == FREECAM)
-    {
-        float dx = xpos - g_LastCursorPosX;
-        float dy = ypos - g_LastCursorPosY;
-
-        g_FreeCam.yaw += 0.003f * dx;
-        g_FreeCam.pitch -= 0.003f * dy;
-
-        float limit = PI / 2.0f - 0.01f;
-        if (g_FreeCam.pitch >  limit) g_FreeCam.pitch =  limit;
-        if (g_FreeCam.pitch < -limit) g_FreeCam.pitch = -limit;
-
-        g_LastCursorPosX = xpos;
-        g_LastCursorPosY = ypos;
-    }
+    // Só processa drag em LookAt (botão esquerdo), FreeCam sempre processa
+    bool drag = g_LeftMouseButtonPressed || g_Player->isFreeCam();
+    if (drag)
+        g_Player->onMouseDrag(dx, dy);
 }
 
 void ScrollCallback(GLFWwindow* window, double xoffset, double yoffset)
 {
-    g_CameraDistance -= 0.5f * yoffset;
-    const float verysmallnumber = std::numeric_limits<float>::epsilon();
-    if (g_CameraDistance < verysmallnumber)
-        g_CameraDistance = verysmallnumber;
+    if (g_Player)
+        g_Player->onScroll((float)yoffset);
 }
 
 void Correcao_KeyCallback(int key, int action, int mod);
@@ -846,60 +449,7 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mod)
         glfwSetWindowShouldClose(window, GL_TRUE);
 
     if (key == GLFW_KEY_SEMICOLON && action == GLFW_PRESS)
-    {
-        g_CamMode = !g_CamMode;
-        if (g_CamMode == FREECAM)
-        {
-            // LookAt → FreeCam: restaura o estado salvo anteriormente
-            g_FreeCam.position = g_FreeCamBackup.position;
-            g_FreeCam.yaw      = g_FreeCamBackup.yaw;
-            g_FreeCam.pitch    = g_FreeCamBackup.pitch;
-
-            glfwGetCursorPos(window, &g_LastCursorPosX, &g_LastCursorPosY);
-            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-        }
-        else
-        {
-            // FreeCam → LookAt: salva o estado atual da FreeCam
-            g_FreeCamBackup.position = g_FreeCam.position;
-            g_FreeCamBackup.yaw      = g_FreeCam.yaw;
-            g_FreeCamBackup.pitch    = g_FreeCam.pitch;
-
-            // Spawn do personagem na posição atual da FreeCam
-            g_Player.position = g_FreeCam.position;
-            g_Player.yaw      = g_FreeCam.yaw;
-
-            printf("\n[POSICAO ATUAL]\n");
-            printf("g_PlayerSpawnPosition = glm::vec4(%.2ff, %.2ff, %.2ff, 1.0f);\n", 
-                g_Player.position.x, g_Player.position.y, g_Player.position.z);
-            printf("g_PlayerSpawnYaw      = %.2ff;\n\n", g_Player.yaw);
-            fflush(stdout);
-
-            // Herda posição da FreeCam como novo alvo da LookAt
-            glm::vec4 front;
-            front.x = cos(g_FreeCam.pitch) * cos(g_FreeCam.yaw);
-            front.y = sin(g_FreeCam.pitch);
-            front.z = cos(g_FreeCam.pitch) * sin(g_FreeCam.yaw);
-            front.w = 0.0f;
-            front   = normalize(front);
-
-            // O ponto que a câmera estava "olhando" vira o novo lookat_target
-            float orbit_dist = 4.0f;
-            glm::vec4 lookat_target = g_FreeCam.position + front * orbit_dist;
-
-            // Recalcula theta/phi/distance
-            glm::vec4 diff = g_FreeCam.position - lookat_target;
-            g_LookAtTarget = g_Player.position + glm::vec4(0.0f, 0.8f, 0.0f, 0.0f);
-            g_CameraDistance = norm(diff);
-
-            if (g_CameraDistance < 0.01f) g_CameraDistance = orbit_dist;
-
-            g_CameraPhi   = asin(diff.y / g_CameraDistance);
-            g_CameraTheta = atan2(diff.x, diff.z);
-
-            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-        }
-    }
+        g_Player->toggleCameraMode();
 
     if (key == GLFW_KEY_H && action == GLFW_PRESS)
         g_ShowInfoText = !g_ShowInfoText;
