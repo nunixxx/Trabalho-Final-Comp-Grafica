@@ -1,9 +1,17 @@
 #pragma once
 
-#include "game_object.h"
-#include "../collision/collision.h"
-#include "../../include/matrices.h"    // Matrix_Translate, Matrix_Rotate_Y, norm, crossproduct, normalize
+#include <cmath>
+#include <cstdio>
+#include <algorithm>
+#include <limits>
 
+#include "../game_object.h"                // Classe Pai
+#include "../../collision/collision.h"
+#include "../../constants.h"               // PLAYER_RADIUS, PLAYER_HEIGHT, SOLDIERS_SCALE, etc.
+#include "../../../include/matrices.h"     // Matrix_Translate, Matrix_Rotate_Y, norm, crossproduct, normalize
+
+#include <GLFW/glfw3.h>
+#include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 #include <glm/mat4x4.hpp>
 
@@ -39,6 +47,7 @@ public:
     // ----------------------------------------------------------
     int   health;
     int   armor;
+    int   ammo;
 
     // ----------------------------------------------------------
     // Movimento

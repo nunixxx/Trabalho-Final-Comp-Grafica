@@ -1,15 +1,5 @@
 #include "player.h"
 
-#include <cmath>
-#include <cstdio>
-#include <algorithm>
-#include <limits>
-
-#include <GLFW/glfw3.h>
-#include <glm/vec3.hpp>
-
-#include "../constants.h"   // PLAYER_RADIUS, PLAYER_HEIGHT, SOLDIERS_SCALE, etc.
-
 // Função externa definida em model_rendering.cpp
 void DrawModel(const std::string& model_name, glm::mat4 model_matrix);
 
@@ -27,6 +17,7 @@ Player::Player(
     // --- stats ---
     , health(PLAYER_INITIAL_HEALTH)
     , armor(PLAYER_INITIAL_ARMOR)
+    , ammo(0)  // começa sem munição — player deve coletar armas
     // --- movimento ---
     , movementSpeed(PLAYER_INITIAL_SPEED)
     // --- câmera LookAt ---

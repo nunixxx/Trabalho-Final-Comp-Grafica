@@ -33,7 +33,11 @@
 #include "constants.h"
 #include "textureRendering/texture_rendering.h"
 
-#include "entities/player.h"
+#include "classes/enemy/enemy.h"
+#include "classes/player/player.h"
+#include "classes/objects/health_pack.h"
+#include "classes/objects/world_object.h"
+#include "classes/objects/gun.h"
 
 void LoadShadersFromFiles();
 GLuint LoadShader_Vertex(const char* filename);
@@ -57,22 +61,9 @@ void ScrollCallback(GLFWwindow* window, double xoffset, double yoffset);
 
 // Instancia de Objetos
 std::unique_ptr<Player> g_Player;
-
-struct HealthPack {
-    glm::vec4 position;
-    bool active;
-    float scale;
-};
-
-struct EnemieInfo
-{
-    glm::vec4 position;
-    glm::mat4x4 matrixScale;
-    float yaw;
-    // int health;
-    // float movement_speed
-};
-
+std::vector<std::unique_ptr<Enemy>> g_Enemies;
+std::vector<std::unique_ptr<HealthPack>> g_HealthPacks;
+std::vector<std::unique_ptr<Gun>> g_Guns;
 // =========================================================
 // Sistema de texturas
 // =========================================================
@@ -82,8 +73,6 @@ std::map<std::string, int>  g_MaterialTextureIndex;
 std::map<std::string, GLuint> g_LoadedTextures;
 // Lista ordenada de GLuints para bind no shader (slot 0..N)
 std::vector<GLuint> g_TextureSlots;
-
-std::vector<HealthPack> healthPacks;
 
 GLint g_model_uniform;
 GLint g_view_uniform;
@@ -159,18 +148,41 @@ int main(int argc, char* argv[])
 
     printf("\nTodos os modelos foram carregados com sucesso!\n\n");
 
-    // Adiciona dois health packs de teste na cena:
-    healthPacks.push_back({glm::vec4( 5.0f, -1.0f,  5.0f, 1.0f), true, 0.5f}); // Posição 1
-    healthPacks.push_back({glm::vec4(-5.0f, -1.0f, -5.0f, 1.0f), true, 0.5f}); // Posição 2
-
     g_CollisionMesh = BuildCollisionMesh(g_ModelRegistry["map"], 0.05f);
 
-    g_Player = std::unique_ptr<Player>(new Player(
+    // Adiciona dois health packs de teste na cena:
+    g_HealthPacks.push_back(std::make_unique<HealthPack>(glm::vec4( 5.0f, -1.0f,  5.0f, 1.0f), 0.5f));
+    g_HealthPacks.push_back(std::make_unique<HealthPack>(glm::vec4(-5.0f, -1.0f, -5.0f, 1.0f), 0.5f));
+
+    // Adiciona duas armas de teste na cena:
+    g_Guns.push_back(std::make_unique<ShotGun>(glm::vec4( -5.0f, 1.0f, -10.0f, 1.0f), 0.05f, 10, 50));
+    g_Guns.push_back(std::make_unique<Pistol>(glm::vec4(-10.0f, -1.0f, -10.0f, 1.0f), 2.0f, 15, 50));
+
+    // Inimigo com rota manual (4 pontos de controle explícitos)
+    g_Enemies.push_back(std::make_unique<Enemy>(
+        glm::vec4(-0.0f, 0.0f, -15.0f, 1.0f),  // posição inicial
+        PI / 4.0f,                                // yaw inicial
+        std::array<glm::vec4, 4>{
+            glm::vec4(-15.0f, 0.0f, -10.0f, 1.0f),
+            glm::vec4( -5.0f, 0.0f, -10.0f, 1.0f),
+            glm::vec4( -5.0f, 0.0f,  -5.0f, 1.0f),
+            glm::vec4(-15.0f, 0.0f,  -5.0f, 1.0f)
+        }
+    ));
+
+    // Inimigo com rota gerada automaticamente (construtor simples)
+    g_Enemies.push_back(std::make_unique<Enemy>(
+        glm::vec4(-10.0f, 0.0f, -15.0f, 1.0f),  // posição inicial
+        0.0f,                                     // yaw inicial
+        4.0f                                     // raio do patrol
+    ));
+
+    g_Player = std::make_unique<Player>(
         window,
         &g_CollisionMesh,
         PLAYER_INITIAL_POSITION,
         PLAYER_INITIAL_YAW
-    ));
+    );
     
     TextRendering_Init();
 
@@ -232,40 +244,22 @@ int main(int argc, char* argv[])
         glm::mat4 mapModelMatrix = Matrix_Scale(0.05f, 0.05f, 0.05f);
         DrawModel("map", mapModelMatrix); // <-- Renderização direta e rápida
 
-        // =========================================================
-        // Renderiza o inimigo
-        glm::mat4 enemieModelMatrix =
-                Matrix_Translate(-15.0f, 0.0f, -10.0f)
-                * Matrix_Rotate_Y(PI / 4.0f)
-                * SOLDIERS_SCALE;
-        DrawModel("enemie", enemieModelMatrix); // <-- Renderização direta e rápida
-
-        glm::mat4 enemieGunMatrix =
-                Matrix_Translate(-10.0f, 0.0f, -10.0f)
-                * Matrix_Rotate_Y(PI / 4.0f)
-                * Matrix_Scale(2.0f, 2.0f, 2.0f);
-        DrawModel("enemieGun", enemieGunMatrix); // <-- Renderização direta e rápida
-
-        glm::mat4 shotgunMatrix =
-                Matrix_Translate(-5.0f, 0.0f, -10.0f)
-                * Matrix_Rotate_Y(PI / 4.0f)
-                * Matrix_Scale(0.05f, 0.05f, 0.05f);
-        DrawModel("shotgun", shotgunMatrix); // <-- Renderização direta e rápida
-
-        float current_time = (float)glfwGetTime();
-        float healthpack_angle = current_time * 1.5f; // Multiplicador define a velocidade do giro
-
-        for (size_t i = 0; i < healthPacks.size(); i++)
+        for (auto& enemy : g_Enemies)
         {
-            if (healthPacks[i].active)
-            {
-                glm::mat4 hpModelMatrix = 
-                      Matrix_Translate(healthPacks[i].position.x, healthPacks[i].position.y, healthPacks[i].position.z)
-                    * Matrix_Rotate_Y(healthpack_angle)
-                    * Matrix_Scale(healthPacks[i].scale, healthPacks[i].scale, healthPacks[i].scale);
+            enemy->update(deltaTime, g_Player.get());
+            enemy->draw();
+        }
 
-                DrawModel("healthpack", hpModelMatrix); 
-            }
+        for (auto& gun : g_Guns)
+        {
+            gun->update(deltaTime, g_Player.get());
+            gun->draw();
+        }
+
+        for (auto& obj : g_HealthPacks)
+        {
+            obj->update(deltaTime, g_Player.get());
+            obj->draw();
         }
         TextRendering_ShowFramesPerSecond(window);
 

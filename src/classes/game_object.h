@@ -4,13 +4,11 @@
 #include <glm/vec4.hpp>
 #include <glm/mat4x4.hpp>
 
+#include <../include/matrices.h>   // Matrix_Translate, Matrix_Rotate_Y — já usadas em main.cpp
+
+
 // Forward declaration — evita incluir o header inteiro aqui
 void DrawModel(const std::string& model_name, glm::mat4 model_matrix);
-
-// Funções de matriz definidas em matrices.h
-glm::mat4 Matrix_Translate(float tx, float ty, float tz);
-glm::mat4 Matrix_Rotate_Y(float angle);
-glm::mat4 Matrix_Scale(float sx, float sy, float sz);
 
 // =========================================================
 // Classe base abstrata para todos os objetos da cena.

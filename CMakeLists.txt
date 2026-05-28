@@ -15,15 +15,19 @@ set(SOURCES
   src/modelRendering/model_rendering.cpp
   src/collision/collision.cpp
   src/textureRendering/texture_rendering.cpp
-  src/entities/game_object.cpp
-  src/entities/player.cpp
+  src/classes/game_object.cpp
+  src/classes/player/player.cpp
+  src/classes/enemy/enemy.cpp
+  src/classes/objects/world_object.cpp
+  src/classes/objects/health_pack.cpp
+  src/classes/objects/gun.cpp
 )
 
 cmake_minimum_required(VERSION 3.10)
 
 project(LAB_FCG VERSION 1.0.0)
 
-set(CMAKE_CXX_STANDARD          11)
+set(CMAKE_CXX_STANDARD          14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS        OFF)
 

@@ -1,5 +1,4 @@
 #include "game_object.h"
-#include <matrices.h>   // Matrix_Translate, Matrix_Rotate_Y — já usadas em main.cpp
 
 // =========================================================
 // buildModelMatrix
