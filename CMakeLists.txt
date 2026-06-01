@@ -21,6 +21,7 @@ set(SOURCES
   src/classes/objects/world_object.cpp
   src/classes/objects/health_pack.cpp
   src/classes/objects/gun.cpp
+  src/hitbox/hitbox_renderer.cpp
 )
 
 cmake_minimum_required(VERSION 3.10)

@@ -32,6 +32,7 @@
 
 #include "constants.h"
 #include "textureRendering/texture_rendering.h"
+#include "hitbox/hitbox_renderer.h"
 
 #include "classes/enemy/enemy.h"
 #include "classes/player/player.h"
@@ -39,11 +40,13 @@
 #include "classes/objects/world_object.h"
 #include "classes/objects/gun.h"
 
+
 void LoadShadersFromFiles();
 GLuint LoadShader_Vertex(const char* filename);
 GLuint LoadShader_Fragment(const char* filename);
 void LoadShader(const char* filename, GLuint shader_id);
 GLuint CreateGpuProgram(GLuint vertex_shader_id, GLuint fragment_shader_id);
+static void GetModelBBox(const std::string& modelName, glm::vec3& outMin, glm::vec3& outMax);
 
 
 void TextRendering_Init();
@@ -59,20 +62,18 @@ void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
 void CursorPosCallback(GLFWwindow* window, double xpos, double ypos);
 void ScrollCallback(GLFWwindow* window, double xoffset, double yoffset);
 
-// Instancia de Objetos
+// Instancias de Objetos
 std::unique_ptr<Player> g_Player;
 std::vector<std::unique_ptr<Enemy>> g_Enemies;
 std::vector<std::unique_ptr<HealthPack>> g_HealthPacks;
 std::vector<std::unique_ptr<Gun>> g_Guns;
+
 // =========================================================
 // Sistema de texturas
 // =========================================================
-// Mapeia nome do material -> índice na unidade de textura OpenGL
-std::map<std::string, int>  g_MaterialTextureIndex;
-// Mapeia nome do arquivo de textura -> GLuint (texture object)
+std::map<std::string, int>    g_MaterialTextureIndex;
 std::map<std::string, GLuint> g_LoadedTextures;
-// Lista ordenada de GLuints para bind no shader (slot 0..N)
-std::vector<GLuint> g_TextureSlots;
+std::vector<GLuint>           g_TextureSlots;
 
 GLint g_model_uniform;
 GLint g_view_uniform;
@@ -85,8 +86,8 @@ GLint g_has_texture_uniform;
 
 float g_ScreenRatio = 1.0f;
 
-bool g_LeftMouseButtonPressed = false;
-bool g_RightMouseButtonPressed = false;
+bool g_LeftMouseButtonPressed   = false;
+bool g_RightMouseButtonPressed  = false;
 bool g_MiddleMouseButtonPressed = false;
 
 CollisionMesh g_CollisionMesh;
@@ -95,7 +96,6 @@ bool g_ShowInfoText = true;
 
 GLuint g_GpuProgramID = 0;
 
-// O registro que guarda a geometria pronta para ser instanciada
 std::map<std::string, ModelAsset> g_ModelRegistry;
 std::map<std::string, ModelPaths> g_PathsRegistry;
 
@@ -112,7 +112,6 @@ int main(int argc, char* argv[])
 
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
     GLFWwindow* window;
@@ -143,25 +142,22 @@ int main(int argc, char* argv[])
     printf("GPU: %s, %s, OpenGL %s, GLSL %s\n", vendor, renderer, glversion, glslversion);
 
     LoadShadersFromFiles();
-
     LoadModelsFromCSV(PATH_CSV);
 
     printf("\nTodos os modelos foram carregados com sucesso!\n\n");
 
     g_CollisionMesh = BuildCollisionMesh(g_ModelRegistry["map"], 0.05f);
 
-    // Adiciona dois health packs de teste na cena:
+    // Objetos da cena
     g_HealthPacks.push_back(std::make_unique<HealthPack>(glm::vec4( 5.0f, -1.0f,  5.0f, 1.0f), 0.5f));
     g_HealthPacks.push_back(std::make_unique<HealthPack>(glm::vec4(-5.0f, -1.0f, -5.0f, 1.0f), 0.5f));
 
-    // Adiciona duas armas de teste na cena:
     g_Guns.push_back(std::make_unique<ShotGun>(glm::vec4( -5.0f, 1.0f, -10.0f, 1.0f), 0.05f, 10, 50));
     g_Guns.push_back(std::make_unique<Pistol>(glm::vec4(-10.0f, -1.0f, -10.0f, 1.0f), 2.0f, 15, 50));
 
-    // Inimigo com rota manual (4 pontos de controle explícitos)
     g_Enemies.push_back(std::make_unique<Enemy>(
-        glm::vec4(-0.0f, 0.0f, -15.0f, 1.0f),  // posição inicial
-        PI / 4.0f,                                // yaw inicial
+        glm::vec4(-0.0f, 0.0f, -15.0f, 1.0f),
+        PI / 4.0f,
         std::array<glm::vec4, 4>{
             glm::vec4(-15.0f, 0.0f, -10.0f, 1.0f),
             glm::vec4( -5.0f, 0.0f, -10.0f, 1.0f),
@@ -170,11 +166,10 @@ int main(int argc, char* argv[])
         }
     ));
 
-    // Inimigo com rota gerada automaticamente (construtor simples)
     g_Enemies.push_back(std::make_unique<Enemy>(
-        glm::vec4(-10.0f, 0.0f, -15.0f, 1.0f),  // posição inicial
-        0.0f,                                     // yaw inicial
-        4.0f                                     // raio do patrol
+        glm::vec4(-10.0f, 0.0f, -15.0f, 1.0f),
+        0.0f,
+        4.0f
     ));
 
     g_Player = std::make_unique<Player>(
@@ -183,38 +178,40 @@ int main(int argc, char* argv[])
         PLAYER_INITIAL_POSITION,
         PLAYER_INITIAL_YAW
     );
-    
+
     TextRendering_Init();
+    HitboxRenderer::Init();
 
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
     glCullFace(GL_BACK);
     glFrontFace(GL_CCW);
 
-    // Ativa todas as texturas (uma vez, antes do loop)
     glUseProgram(g_GpuProgramID);
     BindAllTextures(g_GpuProgramID);
     glUseProgram(0);
 
+    // Pré-calcula bboxes dos modelos usados frequentemente
+    glm::vec3 enemyBMin, enemyBMax;
+    GetModelBBox("enemy", enemyBMin, enemyBMax);
+
+    glm::vec3 soldierBMin, soldierBMax;
+    GetModelBBox("soldier", soldierBMin, soldierBMax);
+
     while (!glfwWindowShouldClose(window))
     {
-
-        
         glClearColor(0.8f, 0.8f, 0.8f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         glUseProgram(g_GpuProgramID);
 
-        // Calcula deltaTime uma vez por frame
         static float lastTime = (float)glfwGetTime();
         float currentTime = (float)glfwGetTime();
         float deltaTime   = currentTime - lastTime;
         lastTime          = currentTime;
 
-        // Atualiza o player (input + movimento + câmera)
         g_Player->update(deltaTime);
 
-        // Monta view/projection com os vetores expostos pelo Player
         glm::mat4 view = Matrix_Camera_View(
             g_Player->cameraPosition,
             g_Player->cameraViewVector,
@@ -232,35 +229,108 @@ int main(int argc, char* argv[])
         glUniformMatrix4fv(g_view_uniform,       1, GL_FALSE, glm::value_ptr(view));
         glUniformMatrix4fv(g_projection_uniform, 1, GL_FALSE, glm::value_ptr(projection));
 
-        // Renderiza o personagem (em FreeCam não desenha nada — já tratado dentro do Player)
+        // ── Player ────────────────────────────────────────────
         g_Player->draw();
+
+        // Hitbox do player
+        if (g_Player->active && g_Player->isLookAt())
+        {
+            glm::mat4 playerModel =
+                Matrix_Translate(g_Player->position.x,
+                                 g_Player->position.y,
+                                 g_Player->position.z)
+                * Matrix_Rotate_Y(g_Player->yaw)
+                * g_Player->matrixScale;
+
+            HitboxRenderer::DrawHitbox(
+                playerModel,
+                soldierBMin, soldierBMax,
+                view, projection,
+                HitboxColor::PLAYER
+            );
+        }
 
         glUniformMatrix4fv(g_view_uniform,       1, GL_FALSE, glm::value_ptr(view));
         glUniformMatrix4fv(g_projection_uniform, 1, GL_FALSE, glm::value_ptr(projection));
 
-        // =========================================================
-        // Renderiza o mapa Doom
-        // =========================================================
+        // ── Mapa ──────────────────────────────────────────────
         glm::mat4 mapModelMatrix = Matrix_Scale(0.05f, 0.05f, 0.05f);
-        DrawModel("map", mapModelMatrix); // <-- Renderização direta e rápida
+        DrawModel("map", mapModelMatrix);
+        // O mapa não tem hitbox de bala, apenas colisão de movimento
 
+        // ── Inimigos ──────────────────────────────────────────
         for (auto& enemy : g_Enemies)
         {
             enemy->update(deltaTime, g_Player.get());
             enemy->draw();
+
+            if (enemy->active)
+            {
+                // Atualiza bbox em tempo real (inimigos se movem)
+                glm::vec3 bmin, bmax;
+                GetModelBBox(enemy->modelName, bmin, bmax);
+
+                HitboxRenderer::DrawHitbox(
+                    enemy->buildModelMatrix(),
+                    bmin, bmax,
+                    view, projection,
+                    HitboxColor::ENEMY
+                );
+            }
         }
 
+        // ── Guns ──────────────────────────────────────────────
         for (auto& gun : g_Guns)
         {
             gun->update(deltaTime, g_Player.get());
             gun->draw();
+
+            if (gun->active && !gun->consumed)
+            {
+                glm::mat4 gunModel =
+                    Matrix_Translate(gun->position.x,
+                                     gun->position.y,
+                                     gun->position.z)
+                    * Matrix_Rotate_Y(gun->currentAngle)
+                    * gun->matrixScale;
+
+                glm::vec3 bmin, bmax;
+                GetModelBBox(gun->modelName, bmin, bmax);
+
+                HitboxRenderer::DrawHitbox(
+                    gunModel, bmin, bmax,
+                    view, projection,
+                    HitboxColor::WEAPON
+                );
+            }
         }
 
+        // ── HealthPacks ───────────────────────────────────────
         for (auto& obj : g_HealthPacks)
         {
             obj->update(deltaTime, g_Player.get());
             obj->draw();
+
+            if (obj->active && !obj->consumed)
+            {
+                glm::mat4 objModel =
+                    Matrix_Translate(obj->position.x,
+                                     obj->position.y,
+                                     obj->position.z)
+                    * Matrix_Rotate_Y(obj->currentAngle)
+                    * obj->matrixScale;
+
+                glm::vec3 bmin, bmax;
+                GetModelBBox(obj->modelName, bmin, bmax);
+
+                HitboxRenderer::DrawHitbox(
+                    objModel, bmin, bmax,
+                    view, projection,
+                    HitboxColor::ITEM
+                );
+            }
         }
+
         TextRendering_ShowFramesPerSecond(window);
 
         glfwSwapBuffers(window);
@@ -427,7 +497,6 @@ void CursorPosCallback(GLFWwindow* window, double xpos, double ypos)
     lastX = xpos;
     lastY = ypos;
 
-    // Só processa drag em LookAt (botão esquerdo), FreeCam sempre processa
     bool drag = g_LeftMouseButtonPressed || g_Player->isFreeCam();
     if (drag)
         g_Player->onMouseDrag(dx, dy);
@@ -454,10 +523,20 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mod)
     if (key == GLFW_KEY_H && action == GLFW_PRESS)
         g_ShowInfoText = !g_ShowInfoText;
 
+    // =========================================================
+    // NOVO: toggle de hitboxes com F1
+    // =========================================================
+    if (key == GLFW_KEY_F1 && action == GLFW_PRESS)
+    {
+        HitboxRenderer::Toggle();
+        fprintf(stdout, "[HitboxRenderer] Hitboxes: %s\n",
+                HitboxRenderer::IsVisible() ? "ATIVADAS" : "DESATIVADAS");
+        fflush(stdout);
+    }
+
     if (key == GLFW_KEY_R && action == GLFW_PRESS)
     {
         LoadShadersFromFiles();
-        // Re-bind texturas após recarregar shaders
         glUseProgram(g_GpuProgramID);
         BindAllTextures(g_GpuProgramID);
         glUseProgram(0);
@@ -475,10 +554,10 @@ void TextRendering_ShowFramesPerSecond(GLFWwindow* window)
 {
     if (!g_ShowInfoText) return;
 
-    static float old_seconds    = (float)glfwGetTime();
+    static float old_seconds     = (float)glfwGetTime();
     static int   ellapsed_frames = 0;
-    static char  buffer[20]     = "?? fps";
-    static int   numchars       = 7;
+    static char  buffer[20]      = "?? fps";
+    static int   numchars        = 7;
 
     ellapsed_frames += 1;
     float seconds          = (float)glfwGetTime();
@@ -493,5 +572,39 @@ void TextRendering_ShowFramesPerSecond(GLFWwindow* window)
 
     float lineheight = TextRendering_LineHeight(window);
     float charwidth  = TextRendering_CharWidth(window);
-    TextRendering_PrintString(window, buffer, 1.0f - (numchars + 1)*charwidth, 1.0f - lineheight, 1.0f);
+
+    TextRendering_PrintString(window, buffer,
+        1.0f - (numchars + 1)*charwidth, 1.0f - lineheight, 1.0f);
+
+    // Indica na tela quando hitboxes estão ativas
+    if (HitboxRenderer::IsVisible())
+    {
+        TextRendering_PrintString(window, "[F1] Hitboxes ON",
+            -1.0f + charwidth, 1.0f - 2.0f * lineheight, 1.0f);
+    }
+}
+
+// =========================================================
+// Helper: retorna a AABB unificada de todas as partes de um
+// modelo registrado. Usado para montar a hitbox de cada objeto.
+// =========================================================
+static void GetModelBBox(const std::string& modelName,
+                         glm::vec3& outMin, glm::vec3& outMax)
+{
+    // Defaults conservadores caso o modelo não seja encontrado
+    outMin = glm::vec3(-1.0f, 0.0f, -1.0f);
+    outMax = glm::vec3( 1.0f, 2.0f,  1.0f);
+
+    auto it = g_ModelRegistry.find(modelName);
+    if (it == g_ModelRegistry.end() || it->second.parts.empty())
+        return;
+
+    outMin = it->second.parts[0].bbox_min;
+    outMax = it->second.parts[0].bbox_max;
+
+    for (const auto& part : it->second.parts)
+    {
+        outMin = glm::min(outMin, part.bbox_min);
+        outMax = glm::max(outMax, part.bbox_max);
+    }
 }
