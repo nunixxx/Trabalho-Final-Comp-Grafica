@@ -235,14 +235,26 @@ void Player::handleMovementLookAt_(float deltaTime)
 
     float speed = movementSpeed * deltaTime * 60.0f;
 
-    glm::vec3 desiredPos(position.x, position.y, position.z);
+    // Movimento XZ vindo do WASD
+    glm::vec3 moveXZ(0.0f);
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) moveXZ += frontXZ;
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) moveXZ -= frontXZ;
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) moveXZ -= rightXZ;
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) moveXZ += rightXZ;
 
-    // WASD relativo à câmera: W=para onde a câmera aponta,
-    // S=oposto, A=esquerda na tela, D=direita na tela
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) desiredPos += frontXZ * speed;
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) desiredPos -= frontXZ * speed;
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) desiredPos -= rightXZ * speed;
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) desiredPos += rightXZ * speed;
+    float len = glm::length(moveXZ);
+    if (len > 0.0001f) moveXZ *= speed / len;
+
+    // Aplica gravidade e pulo
+    applyGravity_(deltaTime);
+    handleJump_();
+
+    // Posição desejada combinando XZ (WASD) e Y (gravidade/pulo)
+    glm::vec3 desiredPos(
+        position.x + moveXZ.x,
+        position.y + verticalVelocity * deltaTime,
+        position.z + moveXZ.z
+    );
 
     // Resolve colisão com a malha do mapa
     if (collisionMesh)
@@ -253,6 +265,19 @@ void Player::handleMovementLookAt_(float deltaTime)
             PLAYER_RADIUS,
             PLAYER_HEIGHT
         );
+
+        // Detecta contato com o chão
+        if (resolved.y > desiredPos.y)
+        {
+            onGround = true;
+            verticalVelocity = 0.0f;
+        }
+        else if (resolved.y < desiredPos.y)
+        {
+            // Colidiu com teto
+            verticalVelocity = 0.0f;
+        }
+
         position = glm::vec4(resolved.x, resolved.y, resolved.z, 1.0f);
     }
     else
@@ -287,33 +312,24 @@ void Player::handleMovementFreeCam_(float deltaTime)
 
 // =========================================================
 // applyGravity_  (privado)
-// Stub para futura implementação de gravidade.
+// Acumula aceleração gravitacional na velocidade vertical.
 // =========================================================
 void Player::applyGravity_(float deltaTime)
 {
-    (void)deltaTime;
-    // Futuro:
-    // if (!onGround)
-    // {
-    //     verticalVelocity += GRAVITY * deltaTime;
-    //     position.y += verticalVelocity * deltaTime;
-    // }
-    // // Checar colisão com o chão e atualizar onGround
+    verticalVelocity += GRAVITY * deltaTime;
 }
 
 // =========================================================
 // handleJump_  (privado)
-// Stub para futura implementação de pulo.
-// Retorna true se o pulo foi iniciado.
+// Inicia um pulo se o jogador estiver no chão e Space for pressionado.
 // =========================================================
 bool Player::handleJump_()
 {
-    // Futuro:
-    // if (onGround && glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
-    // {
-    //     verticalVelocity = JUMP_VELOCITY;
-    //     onGround = false;
-    //     return true;
-    // }
+    if (onGround && glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
+    {
+        verticalVelocity = JUMP_VELOCITY;
+        onGround = false;
+        return true;
+    }
     return false;
 }

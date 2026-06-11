@@ -32,6 +32,10 @@
 #define PLAYER_HEIGHT 1.0f
 #define PLAYER_RADIUS 0.3f
 
+// Physics
+#define GRAVITY -15.0f        // aceleração gravitacional (unidades/s²)
+#define JUMP_VELOCITY 5.0f    // velocidade inicial do pulo (unidades/s)
+
 // Soldiers values
 #define SOLDIERS_SCALE Matrix_Scale(0.1f, 0.1f, 0.1f)
 
