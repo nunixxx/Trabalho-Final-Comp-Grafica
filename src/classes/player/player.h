@@ -53,6 +53,8 @@ public:
     // Movimento
     // ----------------------------------------------------------
     float movementSpeed;
+    float verticalVelocity;  // para futura gravidade
+    bool  onGround;          // para futura gravidade/pulo
 
     // ----------------------------------------------------------
     // Câmera LookAt — parâmetros de órbita
@@ -157,4 +159,10 @@ private:
 
     // Lê WASD e move a câmera livre (modo FreeCam)
     void handleMovementFreeCam_(float deltaTime);
+
+    // Aplica gravidade ao movimento vertical (stub para uso futuro)
+    void applyGravity_(float deltaTime);
+
+    // Tenta iniciar um pulo se estiver no chão (stub para uso futuro)
+    bool handleJump_();
 };

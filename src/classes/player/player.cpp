@@ -20,6 +20,8 @@ Player::Player(
     , ammo(0)  // começa sem munição — player deve coletar armas
     // --- movimento ---
     , movementSpeed(PLAYER_INITIAL_SPEED)
+    , verticalVelocity(0.0f)
+    , onGround(true)
     // --- câmera LookAt ---
     , cameraPhi(INITIAL_CAMERA_PHI)
     , cameraDistance(INITIAL_CAMERA_DISTANCE)
@@ -224,21 +226,23 @@ void Player::handleMovementLookAt_(float deltaTime)
 {
     if (!window) return;
 
-    // Vetores de direção no plano XZ baseados no yaw atual
-    glm::vec3 front(cos(yaw), 0.0f, sin(yaw));
-    glm::vec3 right(front.z, 0.0f, -front.x);  // perpendicular no plano XZ
+    // Direção frontal relativa à câmera no plano XZ.
+    // A câmera está sempre atrás do personagem (ângulo yaw + PI),
+    // portanto a direção câmera→jogador (para onde a câmera aponta)
+    // no plano XZ é (sin(yaw), 0, cos(yaw)).
+    glm::vec3 frontXZ(sin(yaw), 0.0f, cos(yaw));
+    glm::vec3 rightXZ(-frontXZ.z, 0.0f, frontXZ.x);  // direita no espaço da câmera
 
-    // Velocidade escalonada por deltaTime para movimento frame-rate independent
-    float speed = movementSpeed * deltaTime * 60.0f; // 60 = fator de normalização
+    float speed = movementSpeed * deltaTime * 60.0f;
 
     glm::vec3 desiredPos(position.x, position.y, position.z);
 
-    // Nota: W/S movem lateralmente (strafe), A/D movem frente/trás
-    // para corresponder ao comportamento original do projeto
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) desiredPos += right * speed;
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) desiredPos -= right * speed;
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) desiredPos -= front * speed;
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) desiredPos += front * speed;
+    // WASD relativo à câmera: W=para onde a câmera aponta,
+    // S=oposto, A=esquerda na tela, D=direita na tela
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) desiredPos += frontXZ * speed;
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) desiredPos -= frontXZ * speed;
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) desiredPos -= rightXZ * speed;
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) desiredPos += rightXZ * speed;
 
     // Resolve colisão com a malha do mapa
     if (collisionMesh)
@@ -279,4 +283,37 @@ void Player::handleMovementFreeCam_(float deltaTime)
     if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) CamPosition -= front  * speed;
     if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) CamPosition -= right  * speed;
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) CamPosition += right  * speed;
+}
+
+// =========================================================
+// applyGravity_  (privado)
+// Stub para futura implementação de gravidade.
+// =========================================================
+void Player::applyGravity_(float deltaTime)
+{
+    (void)deltaTime;
+    // Futuro:
+    // if (!onGround)
+    // {
+    //     verticalVelocity += GRAVITY * deltaTime;
+    //     position.y += verticalVelocity * deltaTime;
+    // }
+    // // Checar colisão com o chão e atualizar onGround
+}
+
+// =========================================================
+// handleJump_  (privado)
+// Stub para futura implementação de pulo.
+// Retorna true se o pulo foi iniciado.
+// =========================================================
+bool Player::handleJump_()
+{
+    // Futuro:
+    // if (onGround && glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
+    // {
+    //     verticalVelocity = JUMP_VELOCITY;
+    //     onGround = false;
+    //     return true;
+    // }
+    return false;
 }
