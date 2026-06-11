@@ -34,9 +34,9 @@
 
 // Physics
 #define GRAVITY -15.0f        // aceleração gravitacional (unidades/s²)
-#define JUMP_VELOCITY 5.0f    // velocidade inicial do pulo (unidades/s)
+#define JUMP_VELOCITY 9.0f    // velocidade inicial do pulo (unidades/s)
 
 // Soldiers values
-#define SOLDIERS_SCALE Matrix_Scale(0.1f, 0.1f, 0.1f)
+#define SOLDIERS_SCALE Matrix_Scale(0.2f, 0.2f, 0.2f)
 
 #endif

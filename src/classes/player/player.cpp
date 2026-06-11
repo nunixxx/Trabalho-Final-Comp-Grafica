@@ -45,7 +45,7 @@ Player::Player(
     matrixScale = SOLDIERS_SCALE;
     active      = true;
 
-    lookAtTarget_ = position + glm::vec4(0.0f, 0.8f, 0.0f, 0.0f);
+    lookAtTarget_ = position + glm::vec4(0.0f, 1.8f, 0.0f, 0.0f);
 
     // Captura posição inicial do cursor para evitar salto no primeiro frame
     if (window)
@@ -170,7 +170,7 @@ void Player::toggleCameraMode()
         // Reseta órbita para ângulo limpo — evita câmera embaixo do chão
         cameraPhi      = INITIAL_CAMERA_PHI;
         cameraDistance = INITIAL_CAMERA_DISTANCE;
-        lookAtTarget_  = position + glm::vec4(0.0f, 0.8f, 0.0f, 0.0f);
+        lookAtTarget_  = position + glm::vec4(0.0f, 1.8f, 0.0f, 0.0f);
 
         // Log de posição no terminal
         printf("\n[POSICAO ATUAL]\n");
@@ -199,7 +199,7 @@ void Player::updateLookAtCamera_()
     float z = r * cos(cameraPhi) * cos(behindAngle);
     float x = r * cos(cameraPhi) * sin(behindAngle);
 
-    lookAtTarget_    = position + glm::vec4(0.0f, 0.8f, 0.0f, 0.0f);
+    lookAtTarget_    = position + glm::vec4(0.0f, 1.8f, 0.0f, 0.0f);
     cameraPosition   = lookAtTarget_ + glm::vec4(x, y, z, 0.0f);
     cameraViewVector = lookAtTarget_ - cameraPosition;
 }
