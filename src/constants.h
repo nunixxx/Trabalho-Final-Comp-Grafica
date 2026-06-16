@@ -25,7 +25,8 @@
 // Player initial values
 #define PLAYER_INITIAL_POSITION glm::vec4(0.0f, 0.0f, 0.0f, 1.0f) // Dentro do mapa(-38.08f, 0.74f, -161.84f, 1.0f)
 #define PLAYER_INITIAL_YAW -1.57f
-#define PLAYER_INITIAL_HEALTH 100
+#define PLAYER_INITIAL_HEALTH 50
+#define PLAYER_MAX_HEALTH 100
 #define PLAYER_INITIAL_ARMOR 25
 #define PLAYER_INITIAL_SPEED 0.1f
 #define PLAYER_HALF_W 0.3f
