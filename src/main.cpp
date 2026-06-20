@@ -331,6 +331,17 @@ int main(int argc, char* argv[])
             }
         }
 
+        // ── HUD: Vida do Player ─────────────────────────────────
+        if (g_ShowInfoText)
+        {
+            float lineheight = TextRendering_LineHeight(window);
+            float charwidth  = TextRendering_CharWidth(window);
+            char healthStr[32];
+            snprintf(healthStr, 32, "HP: %d/%d", g_Player->health, PLAYER_MAX_HEALTH);
+            TextRendering_PrintString(window, healthStr,
+                -1.0f + charwidth, 1.0f - 3.0f * lineheight, 1.0f);
+        }
+
         TextRendering_ShowFramesPerSecond(window);
 
         glfwSwapBuffers(window);

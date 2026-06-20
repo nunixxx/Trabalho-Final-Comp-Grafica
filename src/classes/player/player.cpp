@@ -20,6 +20,8 @@ Player::Player(
     , ammo(0)  // começa sem munição — player deve coletar armas
     // --- movimento ---
     , movementSpeed(PLAYER_INITIAL_SPEED)
+    , verticalVelocity(0.0f)
+    , onGround(true)
     // --- câmera LookAt ---
     , cameraPhi(INITIAL_CAMERA_PHI)
     , cameraDistance(INITIAL_CAMERA_DISTANCE)
@@ -43,7 +45,7 @@ Player::Player(
     matrixScale = SOLDIERS_SCALE;
     active      = true;
 
-    lookAtTarget_ = position + glm::vec4(0.0f, 0.8f, 0.0f, 0.0f);
+    lookAtTarget_ = position + glm::vec4(0.0f, 1.8f, 0.0f, 0.0f);
 
     // Captura posição inicial do cursor para evitar salto no primeiro frame
     if (window)
@@ -168,7 +170,7 @@ void Player::toggleCameraMode()
         // Reseta órbita para ângulo limpo — evita câmera embaixo do chão
         cameraPhi      = INITIAL_CAMERA_PHI;
         cameraDistance = INITIAL_CAMERA_DISTANCE;
-        lookAtTarget_  = position + glm::vec4(0.0f, 0.8f, 0.0f, 0.0f);
+        lookAtTarget_  = position + glm::vec4(0.0f, 1.8f, 0.0f, 0.0f);
 
         // Log de posição no terminal
         printf("\n[POSICAO ATUAL]\n");
@@ -197,7 +199,7 @@ void Player::updateLookAtCamera_()
     float z = r * cos(cameraPhi) * cos(behindAngle);
     float x = r * cos(cameraPhi) * sin(behindAngle);
 
-    lookAtTarget_    = position + glm::vec4(0.0f, 0.8f, 0.0f, 0.0f);
+    lookAtTarget_    = position + glm::vec4(0.0f, 1.8f, 0.0f, 0.0f);
     cameraPosition   = lookAtTarget_ + glm::vec4(x, y, z, 0.0f);
     cameraViewVector = lookAtTarget_ - cameraPosition;
 }
@@ -224,21 +226,35 @@ void Player::handleMovementLookAt_(float deltaTime)
 {
     if (!window) return;
 
-    // Vetores de direção no plano XZ baseados no yaw atual
-    glm::vec3 front(cos(yaw), 0.0f, sin(yaw));
-    glm::vec3 right(front.z, 0.0f, -front.x);  // perpendicular no plano XZ
+    // Direção frontal relativa à câmera no plano XZ.
+    // A câmera está sempre atrás do personagem (ângulo yaw + PI),
+    // portanto a direção câmera→jogador (para onde a câmera aponta)
+    // no plano XZ é (sin(yaw), 0, cos(yaw)).
+    glm::vec3 frontXZ(sin(yaw), 0.0f, cos(yaw));
+    glm::vec3 rightXZ(-frontXZ.z, 0.0f, frontXZ.x);  // direita no espaço da câmera
 
-    // Velocidade escalonada por deltaTime para movimento frame-rate independent
-    float speed = movementSpeed * deltaTime * 60.0f; // 60 = fator de normalização
+    float speed = movementSpeed * deltaTime * 60.0f;
 
-    glm::vec3 desiredPos(position.x, position.y, position.z);
+    // Movimento XZ vindo do WASD
+    glm::vec3 moveXZ(0.0f);
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) moveXZ += frontXZ;
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) moveXZ -= frontXZ;
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) moveXZ -= rightXZ;
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) moveXZ += rightXZ;
 
-    // Nota: W/S movem lateralmente (strafe), A/D movem frente/trás
-    // para corresponder ao comportamento original do projeto
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) desiredPos += right * speed;
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) desiredPos -= right * speed;
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) desiredPos -= front * speed;
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) desiredPos += front * speed;
+    float len = glm::length(moveXZ);
+    if (len > 0.0001f) moveXZ *= speed / len;
+
+    // Aplica gravidade e pulo
+    applyGravity_(deltaTime);
+    handleJump_();
+
+    // Posição desejada combinando XZ (WASD) e Y (gravidade/pulo)
+    glm::vec3 desiredPos(
+        position.x + moveXZ.x,
+        position.y + verticalVelocity * deltaTime,
+        position.z + moveXZ.z
+    );
 
     // Resolve colisão com a malha do mapa
     if (collisionMesh)
@@ -249,6 +265,19 @@ void Player::handleMovementLookAt_(float deltaTime)
             PLAYER_RADIUS,
             PLAYER_HEIGHT
         );
+
+        // Detecta contato com o chão
+        if (resolved.y > desiredPos.y)
+        {
+            onGround = true;
+            verticalVelocity = 0.0f;
+        }
+        else if (resolved.y < desiredPos.y)
+        {
+            // Colidiu com teto
+            verticalVelocity = 0.0f;
+        }
+
         position = glm::vec4(resolved.x, resolved.y, resolved.z, 1.0f);
     }
     else
@@ -279,4 +308,28 @@ void Player::handleMovementFreeCam_(float deltaTime)
     if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) CamPosition -= front  * speed;
     if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) CamPosition -= right  * speed;
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) CamPosition += right  * speed;
+}
+
+// =========================================================
+// applyGravity_  (privado)
+// Acumula aceleração gravitacional na velocidade vertical.
+// =========================================================
+void Player::applyGravity_(float deltaTime)
+{
+    verticalVelocity += GRAVITY * deltaTime;
+}
+
+// =========================================================
+// handleJump_  (privado)
+// Inicia um pulo se o jogador estiver no chão e Space for pressionado.
+// =========================================================
+bool Player::handleJump_()
+{
+    if (onGround && glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
+    {
+        verticalVelocity = JUMP_VELOCITY;
+        onGround = false;
+        return true;
+    }
+    return false;
 }

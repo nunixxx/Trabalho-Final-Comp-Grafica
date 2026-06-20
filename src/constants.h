@@ -25,14 +25,19 @@
 // Player initial values
 #define PLAYER_INITIAL_POSITION glm::vec4(0.0f, 0.0f, 0.0f, 1.0f) // Dentro do mapa(-38.08f, 0.74f, -161.84f, 1.0f)
 #define PLAYER_INITIAL_YAW -1.57f
-#define PLAYER_INITIAL_HEALTH 100
+#define PLAYER_INITIAL_HEALTH 50
+#define PLAYER_MAX_HEALTH 100
 #define PLAYER_INITIAL_ARMOR 25
 #define PLAYER_INITIAL_SPEED 0.1f
 #define PLAYER_HALF_W 0.3f
 #define PLAYER_HEIGHT 1.0f
 #define PLAYER_RADIUS 0.3f
 
+// Physics
+#define GRAVITY -15.0f        // aceleração gravitacional (unidades/s²)
+#define JUMP_VELOCITY 9.0f    // velocidade inicial do pulo (unidades/s)
+
 // Soldiers values
-#define SOLDIERS_SCALE Matrix_Scale(0.1f, 0.1f, 0.1f)
+#define SOLDIERS_SCALE Matrix_Scale(0.2f, 0.2f, 0.2f)
 
 #endif
