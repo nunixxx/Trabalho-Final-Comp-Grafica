@@ -17,11 +17,12 @@ Player::Player(
     // --- stats ---
     , health(PLAYER_INITIAL_HEALTH)
     , armor(PLAYER_INITIAL_ARMOR)
-    , ammo(0)  // começa sem munição — player deve coletar armas
+    , ammo(5)  // começa com 15 balas — player deve coletar mais
     // --- movimento ---
     , movementSpeed(PLAYER_INITIAL_SPEED)
     , verticalVelocity(0.0f)
     , onGround(true)
+    , shootCooldown(0.0f)
     // --- câmera LookAt ---
     , cameraPhi(INITIAL_CAMERA_PHI)
     , cameraDistance(INITIAL_CAMERA_DISTANCE)
@@ -61,6 +62,10 @@ void Player::update(float deltaTime)
 {
     if (!active) return;
 
+    // Atualiza cooldown de tiro
+    if (shootCooldown > 0.0f)
+        shootCooldown -= deltaTime;
+    
     if (cameraMode == CameraMode::LookAt)
     {
         handleMovementLookAt_(deltaTime);
@@ -345,4 +350,79 @@ bool Player::handleJump_()
         return true;
     }
     return false;
+}
+
+// =========================================================
+// shoot (publico)
+// Verifica se o tiro pode ser disparado (cooldown e munição), então dispara um raio
+// da posição da câmera na direção que ela aponta, testando colisão com inimigos.
+// =========================================================
+
+void Player::shoot(std::vector<std::unique_ptr<Enemy>>& enemies,
+                   const std::map<std::string, ModelAsset>& modelRegistry)
+{
+    if (shootCooldown > 0.0f || ammo <= 0) return;
+
+    shootCooldown = 0.5f;  // meio segundo entre tiros
+    ammo--;
+
+    // Origem e direção do raio (da câmera para onde está olhando)
+    glm::vec3 origin(cameraPosition.x, cameraPosition.y, cameraPosition.z);
+    glm::vec3 dir(cameraViewVector.x, cameraViewVector.y, cameraViewVector.z);
+    float dirLen = glm::length(dir);
+    if (dirLen < 1e-8f) return;
+    dir /= dirLen;
+
+    // Testa contra cada inimigo vivo
+    float  closestT   = std::numeric_limits<float>::max();
+    int    closestIdx = -1;
+
+    for (int i = 0; i < (int)enemies.size(); i++) 
+    {
+        if (!enemies[i]->active) continue;
+
+        // Pega bbox do modelo do inimigo
+        auto it = modelRegistry.find(enemies[i]->modelName);
+        if (it == modelRegistry.end() || it->second.parts.empty()) continue;
+
+        // Calcula AABB em espaço de mundo
+        glm::vec3 bmin(std::numeric_limits<float>::max());
+        glm::vec3 bmax(std::numeric_limits<float>::lowest());
+        for (const auto& part : it->second.parts)
+        {
+            bmin = glm::min(bmin, part.bbox_min);
+            bmax = glm::max(bmax, part.bbox_max);
+        }
+
+        // Aplica escala e posição do inimigo
+        glm::vec3 scale(enemies[i]->matrixScale[0][0],
+                        enemies[i]->matrixScale[1][1],
+                        enemies[i]->matrixScale[2][2]);
+        glm::vec3 pos(enemies[i]->position.x,
+                      enemies[i]->position.y,
+                      enemies[i]->position.z);
+
+        glm::vec3 worldMin = pos + bmin * scale;
+        glm::vec3 worldMax = pos + bmax * scale;
+
+        float t;
+        if (RayVsAABB(origin, dir, worldMin, worldMax, t))
+        {
+            if (t < closestT)
+            {
+                closestT   = t;
+                closestIdx = i;
+            }
+        }
+    }
+
+    if (closestIdx >= 0)
+    {
+        enemies[closestIdx]->takeDamage(35);
+        printf("[Player] Acertou inimigo %d! Dano: 35\n", closestIdx);
+    }
+    else
+    {
+        printf("[Player] Errou!\n");
+    }
 }

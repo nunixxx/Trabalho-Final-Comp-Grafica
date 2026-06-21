@@ -344,6 +344,13 @@ int main(int argc, char* argv[])
             snprintf(healthStr, 32, "HP: %d/%d", g_Player->health, PLAYER_MAX_HEALTH);
             TextRendering_PrintString(window, healthStr,
                 -1.0f + charwidth, 1.0f - 3.0f * lineheight, 1.0f);
+            char ammoStr[32];
+            snprintf(ammoStr, 32, "Ammo: %d", g_Player->ammo);
+            TextRendering_PrintString(window, ammoStr,
+                -1.0f + charwidth, 1.0f - 4.0f * lineheight, 1.0f);
+            
+            // Mira (crosshair) no centro da tela
+            TextRendering_PrintString(window, "+", -0.02f, 0.05f, 2.0f);
         }
 
         TextRendering_ShowFramesPerSecond(window);
@@ -481,6 +488,9 @@ void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
     {
         glfwGetCursorPos(window, &g_LastCursorPosX, &g_LastCursorPosY);
         g_LeftMouseButtonPressed = true;
+
+        if (g_Player && g_Player->isFirstPerson())
+            g_Player->shoot(g_Enemies, g_ModelRegistry);
     }
     if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE)
         g_LeftMouseButtonPressed = false;

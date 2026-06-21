@@ -12,6 +12,7 @@
 #include <algorithm>
 
 #include "../../constants.h"   // PI, SOLDIERS_SCALE
+#include "../../collision/collision.h"
 #include "../../../include/matrices.h"    // Matrix_Translate, Matrix_Rotate_Y, Matrix_Scale
 
 // Forward declaration — evita incluir player.h aqui

@@ -4,11 +4,18 @@
 #include <cstdio>
 #include <algorithm>
 #include <limits>
+#include <vector>
+#include <memory>
+#include <map>
+#include <string>
 
-#include "../game_object.h"                // Classe Pai
-#include "../../collision/collision.h"
-#include "../../constants.h"               // PLAYER_RADIUS, PLAYER_HEIGHT, SOLDIERS_SCALE, etc.
-#include "../../../include/matrices.h"     // Matrix_Translate, Matrix_Rotate_Y, norm, crossproduct, normalize
+#include "../enemy/enemy.h"
+#include "../game_object.h"    
+#include "../../constants.h"                // PLAYER_RADIUS, PLAYER_HEIGHT, SOLDIERS_SCALE, etc.
+#include "../../collision/raycast.h"
+#include "../../collision/collision.h"     
+#include "../../../include/matrices.h"      // Matrix_Translate, Matrix_Rotate_Y, norm, crossproduct, normalize
+
 
 #include <GLFW/glfw3.h>
 #include <glm/vec3.hpp>
@@ -39,6 +46,8 @@ enum class CameraMode
 // O modelo 3D é sempre "soldier" (fixo em constants.h).
 // A escala é sempre SOLDIERS_SCALE.
 // =========================================================
+
+class Enemy;  
 class Player : public GameObject
 {
 public:
@@ -53,8 +62,13 @@ public:
     // Movimento
     // ----------------------------------------------------------
     float movementSpeed;
-    float verticalVelocity;  // para futura gravidade
-    bool  onGround;          // para futura gravidade/pulo
+    float verticalVelocity;  
+    bool  onGround;          
+
+    // ----------------------------------------------------------
+    // Tiro
+    // ----------------------------------------------------------
+    float shootCooldown;   
 
     // ----------------------------------------------------------
     // Câmera LookAt — parâmetros de órbita
@@ -120,6 +134,14 @@ public:
 
     // Scroll do mouse — ajusta distância da câmera LookAt
     void onScroll(float yoffset);
+
+    // ----------------------------------------------------------
+    // Ações do jogador
+    // ----------------------------------------------------------
+
+    // Dispara um tiro testando colisão com inimigos.
+    void shoot(std::vector<std::unique_ptr<Enemy>>& enemies,
+           const std::map<std::string, ModelAsset>& modelRegistry);
 
     // ----------------------------------------------------------
     // Troca de modo de câmera
