@@ -22,6 +22,7 @@ class Player;
 // =========================================================
 enum class EnemyState
 {
+    Idle,    // parado
     Patrol,  // percorre a curva de Bézier pré-definida
     Chase,   // detectou o player — se move na direção dele
     Dead     // sem vida — para de atualizar e de desenhar
@@ -88,18 +89,18 @@ public:
         glm::vec4                        initialPosition,
         float                            initialYaw,
         const std::array<glm::vec4, 4>&  bezierPoints,
+        EnemyState                       initialState  = EnemyState::Idle,
         float                            visionRadius  = 10.0f,
         float                            movementSpeed = 2.0f,
         int                              health        = 100
     );
 
-    // Construtor simples — cria o inimigo parado em uma posição,
-    // com Bézier gerada automaticamente ao redor do ponto inicial.
-    // Útil para testes e para instanciar rapidamente na cena.
+    // Construtor simples — cria o inimigo parado em uma posição
     explicit Enemy(
-        glm::vec4 initialPosition,
-        float     initialYaw     = 0.0f,
-        float     patrolRadius   = 3.0f
+        glm::vec4  initialPosition,
+        float      initialYaw    = 0.0f,
+        float      patrolRadius  = 3.0f,
+        EnemyState initialState  = EnemyState::Idle 
     );
 
     // ----------------------------------------------------------

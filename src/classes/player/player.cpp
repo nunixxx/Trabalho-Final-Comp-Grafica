@@ -66,31 +66,25 @@ void Player::update(float deltaTime)
         handleMovementLookAt_(deltaTime);
         updateLookAtCamera_();
     }
-    else
+    else  // FirstPerson
     {
-        handleMovementFreeCam_(deltaTime);
-        updateFreeCamCamera_();
+        handleMovementFirstPerson_(deltaTime);
+        updateFirstPersonCamera_();
     }
 }
 
 // =========================================================
 // draw
 // Em LookAt: desenha o modelo do soldado no mundo.
-// Em FreeCam: o jogador É a câmera — nada a desenhar.
+// Em FirstPerson: jogador esta nos olhos do solado
 // =========================================================
 void Player::draw()
 {
     if (!active) return;
-    if (cameraMode == CameraMode::FreeCam) return;
+    if (cameraMode == CameraMode::FirstPerson) return;
 
-    glm::mat4 modelMatrix =
-        Matrix_Translate(position.x, position.y, position.z)
-        * Matrix_Rotate_Y(yaw)
-        * matrixScale;
-
-    DrawModel(modelName, modelMatrix);
+    DrawModel(modelName, buildModelMatrix());
 }
-
 // =========================================================
 // onCollision
 // =========================================================
@@ -110,21 +104,15 @@ void Player::onMouseDrag(float dx, float dy)
 {
     if (cameraMode == CameraMode::LookAt)
     {
-        // Mouse gira o personagem horizontalmente e a câmera verticalmente
         yaw      -= 0.01f * dx;
         cameraPhi += 0.01f * dy;
-
-        const float phiMax =  PI / 2.0f;
-        const float phiMin = -PI / 2.0f;
-        cameraPhi = std::max(phiMin, std::min(phiMax, cameraPhi));
+        cameraPhi = std::max(-PI/2.0f, std::min(PI/2.0f, cameraPhi));
     }
-    else // FreeCam
+    else // FirstPerson
     {
-        CamYaw   += 0.003f * dx;
+        CamYaw   += 0.003f * dx;   // note: -= para que mover direita gire direita
         CamPitch -= 0.003f * dy;
-
-        const float limit = PI / 2.0f - 0.01f;
-        CamPitch = std::max(-limit, std::min(limit, CamPitch));
+        CamPitch = std::max(-PI/2.0f + 0.01f, std::min(PI/2.0f - 0.01f, CamPitch));
     }
 }
 
@@ -150,10 +138,10 @@ void Player::toggleCameraMode()
     {
         // Herda transform do personagem — câmera nasce "dentro" dele
         CamPosition = position;
-        CamYaw      = yaw;
+        CamYaw   = yaw - PI / 2.0f;
         CamPitch    = 0.0f;
 
-        cameraMode = CameraMode::FreeCam;
+        cameraMode = CameraMode::FirstPerson;
 
         if (window)
         {
@@ -161,18 +149,14 @@ void Player::toggleCameraMode()
             glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
         }
     }
-    else // FreeCam → LookAt
+    else // FirstPerson → LookAt
     {
-        // Personagem aparece onde a câmera estava, olhando para onde ela olhava
-        position = CamPosition;
-        yaw      = CamYaw;
+        yaw = CamYaw + PI / 2.0f;   // player herda direção que estava olhando
 
-        // Reseta órbita para ângulo limpo — evita câmera embaixo do chão
         cameraPhi      = INITIAL_CAMERA_PHI;
         cameraDistance = INITIAL_CAMERA_DISTANCE;
         lookAtTarget_  = position + glm::vec4(0.0f, 1.8f, 0.0f, 0.0f);
 
-        // Log de posição no terminal
         printf("\n[POSICAO ATUAL]\n");
         printf("position = glm::vec4(%.2ff, %.2ff, %.2ff, 1.0f);\n",
                position.x, position.y, position.z);
@@ -205,17 +189,20 @@ void Player::updateLookAtCamera_()
 }
 
 // =========================================================
-// updateFreeCamCamera_  (privado)
+// updateFirstPersonCamera_  (privado)
 // =========================================================
-void Player::updateFreeCamCamera_()
+void Player::updateFirstPersonCamera_()
 {
+    // Câmera na altura dos olhos
+    const float eyeHeight = 1.7f;
+    cameraPosition = position + glm::vec4(0.0f, eyeHeight, 0.0f, 0.0f);
+
     glm::vec4 front;
     front.x = cos(CamPitch) * cos(CamYaw);
     front.y = sin(CamPitch);
     front.z = cos(CamPitch) * sin(CamYaw);
     front.w = 0.0f;
 
-    cameraPosition   = CamPosition;
     cameraViewVector = front;
 }
 
@@ -287,27 +274,53 @@ void Player::handleMovementLookAt_(float deltaTime)
 }
 
 // =========================================================
-// handleMovementFreeCam_  (privado)
+// handleMovementFirstPerson_  (privado)
 // =========================================================
-void Player::handleMovementFreeCam_(float deltaTime)
+void Player::handleMovementFirstPerson_(float deltaTime)
 {
     if (!window) return;
 
-    glm::vec4 front;
-    front.x = cos(CamPitch) * cos(CamYaw);
-    front.y = sin(CamPitch);
-    front.z = cos(CamPitch) * sin(CamYaw);
-    front.w = 0.0f;
+    // Direção frontal no plano XZ baseada no yaw atual
+    glm::vec3 frontXZ(cos(CamYaw), 0.0f, sin(CamYaw));
+    glm::vec3 rightXZ(-frontXZ.z, 0.0f, frontXZ.x);
 
-    glm::vec4 right = crossproduct(front, glm::vec4(0.0f, 1.0f, 0.0f, 0.0f));
-    right = normalize(right);
+    float speed = movementSpeed * deltaTime * 60.0f;
 
-    float speed = CAMERA_SPEED * deltaTime * 60.0f;
+    glm::vec3 moveXZ(0.0f);
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) moveXZ += frontXZ;
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) moveXZ -= frontXZ;
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) moveXZ -= rightXZ;
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) moveXZ += rightXZ;
 
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) CamPosition += front  * speed;
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) CamPosition -= front  * speed;
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) CamPosition -= right  * speed;
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) CamPosition += right  * speed;
+    float len = glm::length(moveXZ);
+    if (len > 0.0001f) moveXZ *= speed / len;
+
+    applyGravity_(deltaTime);
+    handleJump_();
+
+    glm::vec3 desiredPos(
+        position.x + moveXZ.x,
+        position.y + verticalVelocity * deltaTime,
+        position.z + moveXZ.z
+    );
+
+    if (collisionMesh)
+    {
+        glm::vec3 resolved = ResolvePlayerCollision(
+            *collisionMesh, desiredPos, PLAYER_RADIUS, PLAYER_HEIGHT);
+
+        if (resolved.y > desiredPos.y) { onGround = true;  verticalVelocity = 0.0f; }
+        else if (resolved.y < desiredPos.y)                verticalVelocity = 0.0f;
+
+        position = glm::vec4(resolved, 1.0f);
+    }
+    else
+    {
+        position = glm::vec4(desiredPos, 1.0f);
+    }
+
+    // Sincroniza yaw do player com a câmera
+    yaw = CamYaw;
 }
 
 // =========================================================

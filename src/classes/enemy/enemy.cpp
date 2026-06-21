@@ -10,13 +10,14 @@ Enemy::Enemy(
     glm::vec4                        initialPosition,
     float                            initialYaw,
     const std::array<glm::vec4, 4>&  bezierPoints,
+    EnemyState                       initialState,
     float                            visionRadius,
     float                            movementSpeed,
     int                              health
 )
     : health(health)
     , movementSpeed(movementSpeed)
-    , state(EnemyState::Patrol)
+    , state(initialState)
     , bezierControlPoints(bezierPoints)
     , bezierT(0.0f)
     , bezierSpeed(0.08f)
@@ -47,11 +48,12 @@ Enemy::Enemy(
 Enemy::Enemy(
     glm::vec4 initialPosition,
     float     initialYaw,
-    float     patrolRadius
+    float     patrolRadius,
+    EnemyState initialState
 )
     : health(100)
     , movementSpeed(2.0f)
-    , state(EnemyState::Patrol)
+    , state(initialState)
     , bezierT(0.0f)
     , bezierSpeed(0.08f)
     , visionRadius(10.0f)
@@ -89,21 +91,21 @@ void Enemy::update(float deltaTime, const Player* player)
 {
     if (!active || state == EnemyState::Dead) return;
 
-    // --- Detecta o player e troca de estado ---
     if (player)
     {
-        glm::vec4 diff    = player->position - position;
-        float     distSq  = diff.x*diff.x + diff.y*diff.y + diff.z*diff.z;
+        glm::vec4 diff     = player->position - position;
+        float     distSq   = diff.x*diff.x + diff.y*diff.y + diff.z*diff.z;
         float     radiusSq = visionRadius * visionRadius;
 
         if (distSq <= radiusSq)
             state = EnemyState::Chase;
-        else
-            state = EnemyState::Patrol;
+        else if (state == EnemyState::Chase)
+            state = EnemyState::Idle;  // perdeu o player, para no lugar
     }
 
-    // --- Executa comportamento do estado atual ---
-    if (state == EnemyState::Patrol)
+    if (state == EnemyState::Idle)
+        return;  // parado, não faz nada
+    else if (state == EnemyState::Patrol)
         updatePatrol_(deltaTime);
     else if (state == EnemyState::Chase && player)
         updateChase_(deltaTime, player);

@@ -163,13 +163,15 @@ int main(int argc, char* argv[])
             glm::vec4( -5.0f, 0.0f, -10.0f, 1.0f),
             glm::vec4( -5.0f, 0.0f,  -5.0f, 1.0f),
             glm::vec4(-15.0f, 0.0f,  -5.0f, 1.0f)
-        }
+        },
+        EnemyState::Patrol
     ));
 
     g_Enemies.push_back(std::make_unique<Enemy>(
-        glm::vec4(-10.0f, 0.0f, -15.0f, 1.0f),
+        glm::vec4(-38.08f, 0.74f, -161.84f, 1.0f),
         0.0f,
-        4.0f
+        4.0f,
+        EnemyState::Idle
     ));
 
     g_Player = std::make_unique<Player>(
@@ -508,7 +510,7 @@ void CursorPosCallback(GLFWwindow* window, double xpos, double ypos)
     lastX = xpos;
     lastY = ypos;
 
-    bool drag = g_LeftMouseButtonPressed || g_Player->isFreeCam();
+    bool drag = g_LeftMouseButtonPressed || g_Player->isFirstPerson();
     if (drag)
         g_Player->onMouseDrag(dx, dy);
 }

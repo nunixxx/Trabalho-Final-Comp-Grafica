@@ -7,7 +7,7 @@
 //
 // Subclasse concreta de WorldObject.
 // Ao ser coletado, cura o player até o limite de maxHealth.
-// Gira continuamente no eixo Y (comportamento do Doom original).
+// Gira continuamente no eixo Y.
 // =========================================================
 class HealthPack : public WorldObject
 {

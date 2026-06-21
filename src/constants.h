@@ -14,7 +14,7 @@
 // Camera Settings
 #define FARPLANE -200.0f
 #define NEARPLANE -0.1f
-#define FREECAM true
+#define FIRSTPERSON true
 #define LOOKAT false
 #define CAMERA_UP_VECTOR glm::vec4(0.0f, 1.0f, 0.0f, 0.0f)
 #define CAMERA_SPEED 1.0f
@@ -23,7 +23,7 @@
 #define INITIAL_CAMERA_DISTANCE 5.0f
 
 // Player initial values
-#define PLAYER_INITIAL_POSITION glm::vec4(0.0f, 0.0f, 0.0f, 1.0f) // Dentro do mapa(-38.08f, 0.74f, -161.84f, 1.0f)
+#define PLAYER_INITIAL_POSITION glm::vec4(-38.08f, 0.74f, -151.84f, 1.0f) // Dentro do mapa(-38.08f, 0.74f, -161.84f, 1.0f)
 #define PLAYER_INITIAL_YAW -1.57f
 #define PLAYER_INITIAL_HEALTH 50
 #define PLAYER_MAX_HEALTH 100

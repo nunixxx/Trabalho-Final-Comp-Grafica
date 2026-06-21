@@ -23,7 +23,7 @@ struct GLFWwindow;  // forward declaration — evita incluir o GLFW aqui
 enum class CameraMode
 {
     LookAt,   // câmera orbita atrás do jogador (gameplay)
-    FreeCam   // câmera livre para inspecionar a cena (pausa/debug)
+    FirstPerson   // modo da camera
 };
 
 // =========================================================
@@ -133,7 +133,7 @@ public:
     // Helpers de estado
     // ----------------------------------------------------------
     bool isAlive()    const { return health > 0; }
-    bool isFreeCam()  const { return cameraMode == CameraMode::FreeCam; }
+    bool isFirstPerson()  const { return cameraMode == CameraMode::FirstPerson; }
     bool isLookAt()   const { return cameraMode == CameraMode::LookAt; }
 
 private:
@@ -151,14 +151,14 @@ private:
     // Atualiza cameraPosition e cameraViewVector no modo LookAt
     void updateLookAtCamera_();
 
-    // Atualiza cameraPosition e cameraViewVector no modo FreeCam
-    void updateFreeCamCamera_();
+    // Atualiza cameraPosition e cameraViewVector no modo FirstPerson
+    void updateFirstPersonCamera_();
 
     // Lê WASD e move o personagem (modo LookAt)
     void handleMovementLookAt_(float deltaTime);
 
-    // Lê WASD e move a câmera livre (modo FreeCam)
-    void handleMovementFreeCam_(float deltaTime);
+    // Lê WASD e move a câmera livre (modo FirstPerson)
+    void handleMovementFirstPerson_(float deltaTime);
 
     // Aplica gravidade ao movimento vertical (stub para uso futuro)
     void applyGravity_(float deltaTime);
