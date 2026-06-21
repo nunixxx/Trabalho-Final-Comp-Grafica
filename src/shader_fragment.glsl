@@ -14,8 +14,8 @@ uniform int object_id;
 uniform vec4 bbox_min;
 uniform vec4 bbox_max;
 
-// Array de texturas (suporta até 64 materiais diferentes)
-uniform sampler2D texture_map[64];
+// Array de texturas (suporta até 128 materiais diferentes)
+uniform sampler2D texture_map[128];
 uniform int texture_index; // índice da textura do objeto atual
 uniform int has_texture;   // 1 se tem textura, 0 se não tem
 
