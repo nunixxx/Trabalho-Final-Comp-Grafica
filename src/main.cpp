@@ -166,6 +166,7 @@ int main(int argc, char* argv[])
         },
         EnemyState::Patrol
     ));
+    g_Enemies.back()->collisionMesh = &g_CollisionMesh;
 
     g_Enemies.push_back(std::make_unique<Enemy>(
         glm::vec4(-38.08f, 0.74f, -161.84f, 1.0f),
@@ -173,6 +174,7 @@ int main(int argc, char* argv[])
         4.0f,
         EnemyState::Idle
     ));
+    g_Enemies.back()->collisionMesh = &g_CollisionMesh;
 
     g_Player = std::make_unique<Player>(
         window,

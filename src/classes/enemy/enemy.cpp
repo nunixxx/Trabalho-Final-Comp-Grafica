@@ -24,6 +24,9 @@ Enemy::Enemy(
     , visionRadius(visionRadius)
     , gunModelName("pistol")
     , gunModelScale(Matrix_Scale(2.0f, 2.0f, 2.0f))
+    , verticalVelocity(0.0f)
+    , onGround(true)
+    , collisionMesh(nullptr)
 {
     modelName   = "enemy";
     position    = initialPosition;
@@ -59,6 +62,9 @@ Enemy::Enemy(
     , visionRadius(10.0f)
     , gunModelName("pistol")
     , gunModelScale(Matrix_Scale(2.0f, 2.0f, 2.0f))
+    , verticalVelocity(0.0f)
+    , onGround(true)
+    , collisionMesh(nullptr)
 {
     modelName   = "enemy";
     position    = initialPosition;
@@ -181,31 +187,44 @@ glm::vec4 Enemy::evaluateBezier_(float t) const
 // =========================================================
 void Enemy::updatePatrol_(float deltaTime)
 {
-    // Amostra a posição atual e um pequeno passo à frente para
-    // calcular a direção do movimento (usado no yaw)
     const float lookAheadDelta = 0.01f;
     float tNext = bezierT + lookAheadDelta;
 
     glm::vec4 current = evaluateBezier_(bezierT);
     glm::vec4 next    = evaluateBezier_(std::min(tNext, 1.0f));
 
-    // Direção do movimento no plano XZ
     glm::vec4 dir = next - current;
     if (std::abs(dir.x) > 1e-5f || std::abs(dir.z) > 1e-5f)
         yaw = std::atan2(dir.z, dir.x);
 
-    // Avança t proporcionalmente ao deltaTime
     bezierT += bezierSpeed * deltaTime;
-
-    // Loop: quando chega ao fim, reinicia do começo
     if (bezierT > 1.0f)
         bezierT = 0.0f;
 
-    // Aplica posição — mantém o Y do ponto de controle (não flutua)
     glm::vec4 pos = evaluateBezier_(bezierT);
-    position.x = pos.x;
-    position.z = pos.z;
-    // position.y mantido: não deixa o inimigo afundar nem voar
+
+    applyGravity_(deltaTime);
+
+    glm::vec3 desiredPos(
+        pos.x,
+        position.y + verticalVelocity * deltaTime,
+        pos.z
+    );
+
+    if (collisionMesh)
+    {
+        glm::vec3 resolved = ResolvePlayerCollision(
+            *collisionMesh, desiredPos, PLAYER_RADIUS, PLAYER_HEIGHT);
+
+        if (resolved.y > desiredPos.y) { onGround = true;  verticalVelocity = 0.0f; }
+        else if (resolved.y < desiredPos.y)                verticalVelocity = 0.0f;
+
+        position = glm::vec4(resolved, 1.0f);
+    }
+    else
+    {
+        position = glm::vec4(desiredPos, 1.0f);
+    }
 }
 
 // =========================================================
@@ -218,25 +237,40 @@ void Enemy::updateChase_(float deltaTime, const Player* player)
 {
     glm::vec4 diff = player->position - position;
 
-    // Distância no plano XZ (ignora diferença de altura)
     float distXZ = std::sqrt(diff.x*diff.x + diff.z*diff.z);
 
-    // Para de se aproximar quando estiver muito perto (evita sobreposição)
     const float stopDistance = 1.5f;
-    if (distXZ <= stopDistance) return;
+    if (distXZ > stopDistance)
+    {
+        float invDist = 1.0f / (distXZ + 1e-8f);
+        float dx = diff.x * invDist;
+        float dz = diff.z * invDist;
 
-    // Normaliza a direção no plano XZ
-    float invDist = 1.0f / (distXZ + 1e-8f);
-    float dx = diff.x * invDist;
-    float dz = diff.z * invDist;
+        yaw = std::atan2(dz, dx);
 
-    // Atualiza yaw para encarar o player
-    yaw = std::atan2(dz, dx);
+        float speed = movementSpeed * deltaTime;
+        position.x += dx * speed;
+        position.z += dz * speed;
+    }
 
-    // Move em direção ao player
-    float speed = movementSpeed * deltaTime;
-    position.x += dx * speed;
-    position.z += dz * speed;
+    applyGravity_(deltaTime);
+
+    glm::vec3 desiredPos(position.x, position.y + verticalVelocity * deltaTime, position.z);
+
+    if (collisionMesh)
+    {
+        glm::vec3 resolved = ResolvePlayerCollision(
+            *collisionMesh, desiredPos, PLAYER_RADIUS, PLAYER_HEIGHT);
+
+        if (resolved.y > desiredPos.y) { onGround = true;  verticalVelocity = 0.0f; }
+        else if (resolved.y < desiredPos.y)                verticalVelocity = 0.0f;
+
+        position = glm::vec4(resolved, 1.0f);
+    }
+    else
+    {
+        position = glm::vec4(desiredPos, 1.0f);
+    }
 }
 
 // =========================================================
@@ -250,4 +284,16 @@ glm::mat4 Enemy::buildGunMatrix_() const
     return Matrix_Translate(position.x, position.y, position.z)
          * Matrix_Rotate_Y(yaw)
          * gunModelScale;
+}
+
+// =========================================================
+// applyGravity_  (privado)
+// 
+// Aplica gravidade ao inimigo, atualizando verticalVelocity e
+// position.y.
+// =========================================================
+
+void Enemy::applyGravity_(float deltaTime)
+{
+    verticalVelocity += GRAVITY * deltaTime;
 }

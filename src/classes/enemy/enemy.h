@@ -49,6 +49,17 @@ public:
     // ----------------------------------------------------------
     int   health;
     float movementSpeed;
+    
+    // ----------------------------------------------------------
+    // Física
+    // ----------------------------------------------------------
+    float verticalVelocity;
+    bool  onGround;
+
+    // ----------------------------------------------------------
+    // Referência à malha de colisão
+    // ----------------------------------------------------------
+    const CollisionMesh* collisionMesh;
 
     // ----------------------------------------------------------
     // Estado atual de comportamento
@@ -147,4 +158,7 @@ private:
 
     // Constrói a model matrix da arma com base na posição e yaw do inimigo.
     glm::mat4 buildGunMatrix_() const;
+
+    // Aplica gravidade ao inimigo, atualizando verticalVelocity e position.y.
+    void applyGravity_(float deltaTime);
 };
