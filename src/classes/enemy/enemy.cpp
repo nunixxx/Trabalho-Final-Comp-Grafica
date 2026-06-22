@@ -17,6 +17,9 @@ Enemy::Enemy(
 )
     : health(health)
     , movementSpeed(movementSpeed)
+    , contactDamageCooldown(0.0f)
+    , contactDamageInterval(1.0f)
+    , contactDamage(10)
     , state(initialState)
     , bezierControlPoints(bezierPoints)
     , bezierT(0.0f)
@@ -56,6 +59,9 @@ Enemy::Enemy(
 )
     : health(100)
     , movementSpeed(2.0f)
+    , contactDamageCooldown(0.0f)
+    , contactDamageInterval(1.0f)
+    , contactDamage(10)
     , state(initialState)
     , bezierT(0.0f)
     , bezierSpeed(0.08f)
@@ -143,7 +149,7 @@ void Enemy::onCollision(GameObject& other)
 // =========================================================
 // takeDamage
 // =========================================================
-void Enemy::takeDamage(int amount)
+void Enemy::takeDamage(int amount, Player* attacker)
 {
     if (state == EnemyState::Dead) return;
 
@@ -156,6 +162,12 @@ void Enemy::takeDamage(int amount)
         state  = EnemyState::Dead;
         active = false;
         printf("[Enemy] morreu.\n");
+
+        if (attacker)
+        {
+            attacker->ammo += 7;
+            printf("[Enemy] Player ganhou 7 balas! Ammo atual: %d\n", attacker->ammo);
+        }
     }
 }
 
@@ -236,8 +248,11 @@ void Enemy::updatePatrol_(float deltaTime)
 void Enemy::updateChase_(float deltaTime, const Player* player)
 {
     glm::vec4 diff = player->position - position;
-
     float distXZ = std::sqrt(diff.x*diff.x + diff.z*diff.z);
+
+    // Atualiza cooldown de dano
+    if (contactDamageCooldown > 0.0f)
+        contactDamageCooldown -= deltaTime;
 
     const float stopDistance = 1.5f;
     if (distXZ > stopDistance)
@@ -251,6 +266,25 @@ void Enemy::updateChase_(float deltaTime, const Player* player)
         float speed = movementSpeed * deltaTime;
         position.x += dx * speed;
         position.z += dz * speed;
+    }
+    else
+    {
+        // Encostou no player — aplica dano se cooldown zerou
+        if (contactDamageCooldown <= 0.0f)
+        {
+            const_cast<Player*>(player)->health -= contactDamage;
+            contactDamageCooldown = contactDamageInterval;
+
+            printf("[Enemy] Causou %d de dano ao player! HP restante: %d\n",
+                   contactDamage, player->health);
+
+            if (player->health <= 0)
+            {
+                const_cast<Player*>(player)->health = 0;
+                const_cast<Player*>(player)->active = false;
+                printf("[Player] Morreu!\n");
+            }
+        }
     }
 
     applyGravity_(deltaTime);

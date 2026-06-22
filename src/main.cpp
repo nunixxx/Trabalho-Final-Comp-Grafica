@@ -156,7 +156,7 @@ int main(int argc, char* argv[])
     g_Guns.push_back(std::make_unique<Pistol>(glm::vec4(-10.0f, -1.0f, -10.0f, 1.0f), 2.0f, 15, 50));
 
     g_Enemies.push_back(std::make_unique<Enemy>(
-        glm::vec4(-0.0f, 0.0f, -15.0f, 1.0f),
+        glm::vec4(-38.08f, 0.74f, -161.84f, 1.0f),
         PI / 4.0f,
         std::array<glm::vec4, 4>{
             glm::vec4(-15.0f, 0.0f, -10.0f, 1.0f),
@@ -169,7 +169,7 @@ int main(int argc, char* argv[])
     g_Enemies.back()->collisionMesh = &g_CollisionMesh;
 
     g_Enemies.push_back(std::make_unique<Enemy>(
-        glm::vec4(-38.08f, 0.74f, -161.84f, 1.0f),
+        glm::vec4(-11.15f, -0.40f, -155.05f, 1.0f),
         0.0f,
         4.0f,
         EnemyState::Idle
@@ -215,6 +215,19 @@ int main(int argc, char* argv[])
         lastTime          = currentTime;
 
         g_Player->update(deltaTime);
+
+        // Verifica morte do player
+        if (!g_Player->active)
+        {
+            // Exibe mensagem por 3 segundos e fecha
+            glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            TextRendering_PrintString(window, "VOCE MORREU!", -0.25f, 0.05f, 3.0f);
+            glfwSwapBuffers(window);
+            glfwPollEvents();
+            glfwWaitEventsTimeout(10.0);
+            break;
+        }
 
         glm::mat4 view = Matrix_Camera_View(
             g_Player->cameraPosition,
@@ -335,7 +348,7 @@ int main(int argc, char* argv[])
             }
         }
 
-        // ── HUD: Vida do Player ─────────────────────────────────
+        // ── HUD 
         if (g_ShowInfoText)
         {
             float lineheight = TextRendering_LineHeight(window);

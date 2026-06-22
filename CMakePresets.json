@@ -6,11 +6,12 @@
             "displayName": "GCC 15.2.0 x86_64-w64-mingw32 (ucrt64)",
             "description": "Using compilers: C = C:\\msys64\\ucrt64\\bin\\gcc.exe, CXX = C:\\msys64\\ucrt64\\bin\\g++.exe",
             "generator": "MinGW Makefiles",
-            "binaryDir": "${sourceDir}/out/build/${presetName}",
+            "binaryDir": "${sourceDir}/out/build/ucrt64",
             "cacheVariables": {
-                "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/ucrt64",
                 "CMAKE_C_COMPILER": "C:/msys64/ucrt64/bin/gcc.exe",
                 "CMAKE_CXX_COMPILER": "C:/msys64/ucrt64/bin/g++.exe",
+                "CMAKE_MAKE_PROGRAM": "C:/msys64/ucrt64/bin/mingw32-make.exe",
                 "CMAKE_BUILD_TYPE": "Debug"
             }
         }

@@ -34,7 +34,7 @@
 #define PLAYER_RADIUS 0.3f
 
 // Physics
-#define GRAVITY -15.0f        // aceleração gravitacional (unidades/s²)
+#define GRAVITY -30.0f        // aceleração gravitacional (unidades/s²)
 #define JUMP_VELOCITY 9.0f    // velocidade inicial do pulo (unidades/s)
 
 // Soldiers values

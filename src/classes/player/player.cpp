@@ -86,9 +86,50 @@ void Player::update(float deltaTime)
 void Player::draw()
 {
     if (!active) return;
-    if (cameraMode == CameraMode::FirstPerson) return;
+    if (cameraMode == CameraMode::LookAt)
+    {
+        DrawModel(modelName, buildModelMatrix());
+        return;
+    }
 
-    DrawModel(modelName, buildModelMatrix());
+    // Direção frontal da câmera (pitch + yaw)
+    glm::vec3 front(
+        cos(CamPitch) * cos(CamYaw),
+        sin(CamPitch),
+        cos(CamPitch) * sin(CamYaw)
+    );
+
+    glm::vec3 worldUp(0.0f, 1.0f, 0.0f);
+    glm::vec3 right = glm::normalize(glm::cross(front, worldUp));
+    glm::vec3 up    = glm::normalize(glm::cross(right, front));
+
+    glm::vec3 eyePos(cameraPosition.x, cameraPosition.y, cameraPosition.z);
+
+    float forwardOffset = 0.6f;
+    float rightOffset   = 0.25f;
+    float downOffset    = -0.25f;
+
+    glm::vec3 gunPos = eyePos
+        + front * forwardOffset
+        + right * rightOffset
+        + up    * downOffset;
+
+    // Monta uma matriz de rotação com os vetores da câmera
+    // para que a arma sempre aponte exatamente para onde a câmera olha
+    glm::mat4 rotMatrix = glm::mat4(
+        glm::vec4(right,   0.0f),   // eixo X = direita da câmera
+        glm::vec4(up,      0.0f),   // eixo Y = cima da câmera
+        glm::vec4(-front,  0.0f),   // eixo Z = oposto ao front (OpenGL right-hand)
+        glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)
+    );
+
+    glm::mat4 gunMatrix =
+        Matrix_Translate(gunPos.x, gunPos.y, gunPos.z)
+        * rotMatrix
+        * Matrix_Rotate_Y(-PI/2.0f)  // arma nasce deitada no chão, precisa rotacionar
+        * Matrix_Scale(2.0f, 2.0f, 2.0f);
+
+    DrawModel("pistol", gunMatrix);
 }
 // =========================================================
 // onCollision
@@ -418,7 +459,7 @@ void Player::shoot(std::vector<std::unique_ptr<Enemy>>& enemies,
 
     if (closestIdx >= 0)
     {
-        enemies[closestIdx]->takeDamage(35);
+        enemies[closestIdx]->takeDamage(35, this);
         printf("[Player] Acertou inimigo %d! Dano: 35\n", closestIdx);
     }
     else

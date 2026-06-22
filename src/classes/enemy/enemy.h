@@ -49,7 +49,10 @@ public:
     // Stats
     // ----------------------------------------------------------
     int   health;
-    float movementSpeed;
+    float movementSpeed;    
+    float contactDamageCooldown;   // tempo restante até poder causar dano novamente
+    float contactDamageInterval;   // intervalo entre danos (segundos)
+    int   contactDamage;           // dano por toque
     
     // ----------------------------------------------------------
     // Física
@@ -134,7 +137,7 @@ public:
     void onCollision(GameObject& other) override;
 
     // Aplica dano diretamente (chamado pelo sistema de projéteis).
-    void takeDamage(int amount);
+    void takeDamage(int amount, Player* attacker = nullptr);
 
     // ----------------------------------------------------------
     // Helpers de estado
