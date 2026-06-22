@@ -379,3 +379,31 @@ void LoadModelsFromCSV(const std::string& file_path) {
         }
     }
 }
+
+void DrawModelPart(const std::string& model_name,
+                   const std::string& part_name,
+                   glm::mat4 model_matrix)
+{
+    auto it = g_ModelRegistry.find(model_name);
+    if (it == g_ModelRegistry.end()) return;
+
+    const ModelAsset& asset = g_ModelRegistry[model_name];
+    glUniformMatrix4fv(g_model_uniform, 1, GL_FALSE, glm::value_ptr(model_matrix));
+
+    for (const SceneObject& obj : asset.parts)
+    {
+        // O nome do SceneObject é "NomeParte#MaterialID"
+        // Verificamos se começa com o part_name desejado
+        if (obj.name.rfind(part_name, 0) != 0) continue;
+
+        glUniform4f(g_bbox_min_uniform, obj.bbox_min.x, obj.bbox_min.y, obj.bbox_min.z, 1.0f);
+        glUniform4f(g_bbox_max_uniform, obj.bbox_max.x, obj.bbox_max.y, obj.bbox_max.z, 1.0f);
+        glUniform1i(g_texture_index_uniform, obj.material_id >= 0 ? obj.material_id : 0);
+        glUniform1i(g_has_texture_uniform,   obj.material_id >= 0 ? 1 : 0);
+
+        glBindVertexArray(obj.vertex_array_object_id);
+        glDrawElements(obj.rendering_mode, (GLsizei)obj.num_indices,
+            GL_UNSIGNED_INT, (void*)(obj.first_index * sizeof(GLuint)));
+        glBindVertexArray(0);
+    }
+}

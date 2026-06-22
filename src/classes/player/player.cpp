@@ -26,6 +26,8 @@ Player::Player(
     // --- câmera LookAt ---
     , cameraPhi(INITIAL_CAMERA_PHI)
     , cameraDistance(INITIAL_CAMERA_DISTANCE)
+    // --- animação ---
+    , animator("soldier")
     // --- câmera FreeCam ---
     , CamPosition(initialPosition)
     , CamYaw(initialYaw)
@@ -62,6 +64,34 @@ void Player::update(float deltaTime)
 {
     if (!active) return;
 
+    // --- Detecta estado de animação ---
+    bool isMoving = false;
+    if (window)
+    {
+        isMoving = (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS ||
+                    glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS ||
+                    glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS ||
+                    glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS);
+    }
+
+    // Shooting tem prioridade sobre Walking
+    if (animator.getState() == AnimationState::Shooting)
+    {
+        // Volta ao idle/walk após a animação de tiro terminar (~0.45s)
+        // O Animator continua rodando; verificamos o tempo via estado
+        // Solução simples: usar um timer externo no Player
+        // (veja shootCooldown que já existe — reutilizamos ele)
+        if (shootCooldown <= 0.f)
+            animator.setState(isMoving ? AnimationState::Walking : AnimationState::Idle);
+    }
+    else
+    {
+        animator.setState(isMoving ? AnimationState::Walking : AnimationState::Idle);
+    }
+
+    // Atualiza o animator
+    animator.update(deltaTime);
+
     // Atualiza cooldown de tiro
     if (shootCooldown > 0.0f)
         shootCooldown -= deltaTime;
@@ -86,50 +116,63 @@ void Player::update(float deltaTime)
 void Player::draw()
 {
     if (!active) return;
-    if (cameraMode == CameraMode::LookAt)
+    if (cameraMode == CameraMode::FirstPerson)
     {
-        DrawModel(modelName, buildModelMatrix());
+        // Direção frontal da câmera (pitch + yaw)
+        glm::vec3 front(
+            cos(CamPitch) * cos(CamYaw),
+            sin(CamPitch),
+            cos(CamPitch) * sin(CamYaw)
+        );
+
+        glm::vec3 worldUp(0.0f, 1.0f, 0.0f);
+        glm::vec3 right = glm::normalize(glm::cross(front, worldUp));
+        glm::vec3 up    = glm::normalize(glm::cross(right, front));
+
+        glm::vec3 eyePos(cameraPosition.x, cameraPosition.y, cameraPosition.z);
+
+        float forwardOffset = 0.6f;
+        float rightOffset   = 0.25f;
+        float downOffset    = -0.25f;
+
+        glm::vec3 gunPos = eyePos
+            + front * forwardOffset
+            + right * rightOffset
+            + up    * downOffset;
+
+        // Monta uma matriz de rotação com os vetores da câmera
+        // para que a arma sempre aponte exatamente para onde a câmera olha
+        glm::mat4 rotMatrix = glm::mat4(
+            glm::vec4(right,   0.0f),   // eixo X = direita da câmera
+            glm::vec4(up,      0.0f),   // eixo Y = cima da câmera
+            glm::vec4(-front,  0.0f),   // eixo Z = oposto ao front (OpenGL right-hand)
+            glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)
+        );
+
+        glm::mat4 gunMatrix =
+            Matrix_Translate(gunPos.x, gunPos.y, gunPos.z)
+            * rotMatrix
+            * Matrix_Rotate_Y(-PI/2.0f)  // arma nasce deitada no chão, precisa rotacionar
+            * Matrix_Scale(2.0f, 2.0f, 2.0f);
+
+        DrawModel("pistol", gunMatrix);
         return;
     }
 
-    // Direção frontal da câmera (pitch + yaw)
-    glm::vec3 front(
-        cos(CamPitch) * cos(CamYaw),
-        sin(CamPitch),
-        cos(CamPitch) * sin(CamYaw)
-    );
+    // Monta a matrix base do objeto (igual ao buildModelMatrix())
+    glm::mat4 base = Matrix_Translate(position.x, position.y, position.z)
+                   * Matrix_Rotate_Y(yaw)
+                   * matrixScale;
 
-    glm::vec3 worldUp(0.0f, 1.0f, 0.0f);
-    glm::vec3 right = glm::normalize(glm::cross(front, worldUp));
-    glm::vec3 up    = glm::normalize(glm::cross(right, front));
+    // Desenha cada parte com sua matrix animada
+    DrawModelPart("soldier", "soldier_torso",     animator.getPartMatrix(base, "soldier_torso"));
+    DrawModelPart("soldier", "soldier_head",      animator.getPartMatrix(base, "soldier_head"));
+    DrawModelPart("soldier", "soldier_arm_right", animator.getPartMatrix(base, "soldier_arm_right"));
+    DrawModelPart("soldier", "soldier_arm_left",  animator.getPartMatrix(base, "soldier_arm_left"));
+    DrawModelPart("soldier", "soldier_leg_right", animator.getPartMatrix(base, "soldier_leg_right"));
+    DrawModelPart("soldier", "soldier_leg_left",  animator.getPartMatrix(base, "soldier_leg_left"));
+    DrawModelPart("soldier", "Sphere",           animator.getPartMatrix(base, "Sphere"));
 
-    glm::vec3 eyePos(cameraPosition.x, cameraPosition.y, cameraPosition.z);
-
-    float forwardOffset = 0.6f;
-    float rightOffset   = 0.25f;
-    float downOffset    = -0.25f;
-
-    glm::vec3 gunPos = eyePos
-        + front * forwardOffset
-        + right * rightOffset
-        + up    * downOffset;
-
-    // Monta uma matriz de rotação com os vetores da câmera
-    // para que a arma sempre aponte exatamente para onde a câmera olha
-    glm::mat4 rotMatrix = glm::mat4(
-        glm::vec4(right,   0.0f),   // eixo X = direita da câmera
-        glm::vec4(up,      0.0f),   // eixo Y = cima da câmera
-        glm::vec4(-front,  0.0f),   // eixo Z = oposto ao front (OpenGL right-hand)
-        glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)
-    );
-
-    glm::mat4 gunMatrix =
-        Matrix_Translate(gunPos.x, gunPos.y, gunPos.z)
-        * rotMatrix
-        * Matrix_Rotate_Y(-PI/2.0f)  // arma nasce deitada no chão, precisa rotacionar
-        * Matrix_Scale(2.0f, 2.0f, 2.0f);
-
-    DrawModel("pistol", gunMatrix);
 }
 // =========================================================
 // onCollision

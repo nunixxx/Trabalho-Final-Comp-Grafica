@@ -23,6 +23,7 @@ set(SOURCES
   src/classes/objects/gun.cpp
   src/hitbox/hitbox_renderer.cpp
   src/classes/objects/armor.cpp
+  src/animation/animator.cpp
 )
 
 cmake_minimum_required(VERSION 3.10)

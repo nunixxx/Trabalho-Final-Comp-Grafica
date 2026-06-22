@@ -30,6 +30,7 @@ Enemy::Enemy(
     , verticalVelocity(0.0f)
     , onGround(true)
     , collisionMesh(nullptr)
+    , animator("soldier")
 {
     modelName   = "enemy";
     position    = initialPosition;
@@ -71,6 +72,7 @@ Enemy::Enemy(
     , verticalVelocity(0.0f)
     , onGround(true)
     , collisionMesh(nullptr)
+    , animator("soldier")
 {
     modelName   = "enemy";
     position    = initialPosition;
@@ -117,18 +119,36 @@ void Enemy::update(float deltaTime, const Player* player)
         updatePatrol_(deltaTime);
     else if (state == EnemyState::Chase && player)
         updateChase_(deltaTime, player);
+    
+    if (state == EnemyState::Dead)
+        animator.setState(AnimationState::Dead);
+    else if (state == EnemyState::Chase || state == EnemyState::Patrol)
+        animator.setState(AnimationState::Walking);
+    else
+        animator.setState(AnimationState::Idle);
+
+    animator.update(deltaTime);
 }
 
 // =========================================================
 // draw
-// Desenha o corpo e a arma com matrizes distintas.
+// Desenha o corpo com matrizes distintas.
 // =========================================================
 void Enemy::draw()
 {
     if (!active || state == EnemyState::Dead) return;
 
-    DrawModel(modelName,    buildModelMatrix());
-    DrawModel(gunModelName, buildGunMatrix_());
+    glm::mat4 base = Matrix_Translate(position.x, position.y, position.z)
+                   * Matrix_Rotate_Y(yaw)
+                   * matrixScale;
+
+    DrawModelPart("enemy", "enemy_torso",     animator.getPartMatrix(base, "enemy_torso"));
+    DrawModelPart("enemy", "enemy_head",      animator.getPartMatrix(base, "enemy_head"));
+    DrawModelPart("enemy", "enemy_arm_right", animator.getPartMatrix(base, "enemy_arm_right"));
+    DrawModelPart("enemy", "enemy_arm_left",  animator.getPartMatrix(base, "enemy_arm_left"));
+    DrawModelPart("enemy", "enemy_leg_right", animator.getPartMatrix(base, "enemy_leg_right"));
+    DrawModelPart("enemy", "enemy_leg_left",  animator.getPartMatrix(base, "enemy_leg_left"));
+    DrawModelPart("enemy", "Sphere",           animator.getPartMatrix(base, "Sphere"));
 }
 
 // =========================================================

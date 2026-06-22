@@ -15,7 +15,7 @@
 #include "../../constants.h"   // PI, SOLDIERS_SCALE
 #include "../../collision/collision.h"
 #include "../../../include/matrices.h"    // Matrix_Translate, Matrix_Rotate_Y, Matrix_Scale
-
+#include "../../animation/animator.h"
 // Forward declaration — evita incluir player.h aqui
 class Player;
 
@@ -60,6 +60,11 @@ public:
     // ----------------------------------------------------------
     float verticalVelocity;
     bool  onGround;
+
+    // ----------------------------------------------------------
+    // Animação
+    // ----------------------------------------------------------
+    Animator animator;
 
     // ----------------------------------------------------------
     // Referência à malha de colisão

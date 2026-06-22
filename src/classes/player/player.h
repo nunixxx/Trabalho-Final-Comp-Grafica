@@ -15,6 +15,7 @@
 #include "../../collision/raycast.h"
 #include "../../collision/collision.h"     
 #include "../../../include/matrices.h"      // Matrix_Translate, Matrix_Rotate_Y, norm, crossproduct, normalize
+#include "../../animation/animator.h"
 
 
 #include <GLFW/glfw3.h>
@@ -47,7 +48,7 @@ enum class CameraMode
 // A escala é sempre SOLDIERS_SCALE.
 // =========================================================
 
-class Enemy;  
+class Enemy; 
 class Player : public GameObject
 {
 public:
@@ -75,6 +76,11 @@ public:
     // ----------------------------------------------------------
     float cameraPhi;       // ângulo vertical da órbita
     float cameraDistance;  // distância câmera-alvo
+
+    // ----------------------------------------------------------
+    // Animacao
+    // ----------------------------------------------------------
+    Animator animator;
 
     // ----------------------------------------------------------
     // Câmera Cam — posição e orientação independentes
