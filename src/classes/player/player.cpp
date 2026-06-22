@@ -76,6 +76,16 @@ void Player::update(float deltaTime)
         handleMovementFirstPerson_(deltaTime);
         updateFirstPersonCamera_();
     }
+
+    // Detecta se está se movendo (checa antes de mover)
+    bool wasMoving = isMoving;
+    isMoving = (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS ||
+                glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS ||
+                glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS ||
+                glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS);
+
+    animState.playing = isMoving;
+    UpdateAnimation(*skinnedAsset, animState, deltaTime);
 }
 
 // =========================================================
@@ -88,7 +98,29 @@ void Player::draw()
     if (!active) return;
     if (cameraMode == CameraMode::FirstPerson) return;
 
-    DrawModel(modelName, buildModelMatrix());
+    // Usa o shader skinned
+    glUseProgram(skinnedProgramID);
+
+    // Envia as bone matrices
+    for (int i = 0; i < (int)animState.finalBoneMatrices.size(); i++) {
+        std::string name = "boneMatrices[" + std::to_string(i) + "]";
+        GLint loc = glGetUniformLocation(skinnedProgramID, name.c_str());
+        glUniformMatrix4fv(loc, 1, GL_FALSE,
+                           glm::value_ptr(animState.finalBoneMatrices[i]));
+    }
+
+    // Envia view/projection/model normalmente
+    glUniformMatrix4fv(glGetUniformLocation(skinnedProgramID, "model"),
+                       1, GL_FALSE,
+                       glm::value_ptr(buildModelMatrix()));
+    // view e projection já foram setados no loop principal
+
+    glBindVertexArray(skinnedAsset->VAO);
+    glDrawElements(GL_TRIANGLES, (GLsizei)skinnedAsset->indexCount,
+                   GL_UNSIGNED_INT, 0);
+    glBindVertexArray(0);
+
+    glUseProgram(0); // volta ao programa principal
 }
 // =========================================================
 // onCollision

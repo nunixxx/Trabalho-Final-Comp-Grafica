@@ -4,7 +4,8 @@
             "name": "Win32",
             "includePath": [
                 "${workspaceFolder}/**",
-                "${workspaceFolder}/include"
+                "${workspaceFolder}/include",
+                "C:/Program Files/Assimp/include"
             ],
             "defines": [
                 "_DEBUG",

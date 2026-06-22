@@ -15,12 +15,15 @@
 #include "../../collision/raycast.h"
 #include "../../collision/collision.h"     
 #include "../../../include/matrices.h"      // Matrix_Translate, Matrix_Rotate_Y, norm, crossproduct, normalize
+#include "../../animation/skeletal_animation.h" 
+#include "../../animation/animation_system.h"
 
 
 #include <GLFW/glfw3.h>
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 #include <glm/mat4x4.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 struct GLFWwindow;  // forward declaration — evita incluir o GLFW aqui
 
@@ -63,7 +66,15 @@ public:
     // ----------------------------------------------------------
     float movementSpeed;
     float verticalVelocity;  
-    bool  onGround;          
+    bool  onGround;    
+    
+    // ----------------------------------------------------------
+    // Animação
+    // ----------------------------------------------------------
+    std::unique_ptr<SkinnedModelAsset> skinnedAsset;
+    AnimationState    animState;
+    GLuint            skinnedProgramID;
+    bool              isMoving = false;
 
     // ----------------------------------------------------------
     // Tiro
@@ -187,4 +198,5 @@ private:
 
     // Tenta iniciar um pulo se estiver no chão (stub para uso futuro)
     bool handleJump_();
+
 };

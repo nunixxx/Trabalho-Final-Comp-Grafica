@@ -40,6 +40,8 @@
 #include "classes/objects/world_object.h"
 #include "classes/objects/gun.h"
 
+#include "animation/skeletal_animation.h"
+
 
 void LoadShadersFromFiles();
 GLuint LoadShader_Vertex(const char* filename);
@@ -61,6 +63,9 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mode
 void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
 void CursorPosCallback(GLFWwindow* window, double xpos, double ypos);
 void ScrollCallback(GLFWwindow* window, double xoffset, double yoffset);
+
+SkinnedModelAsset LoadSkinnedModel(const char* path);
+void UpdateAnimation(const SkinnedModelAsset& asset, AnimationState& state, float deltaTime);
 
 // Instancias de Objetos
 std::unique_ptr<Player> g_Player;
@@ -129,6 +134,7 @@ int main(int argc, char* argv[])
     glfwSetScrollCallback(window, ScrollCallback);
 
     glfwMakeContextCurrent(window);
+    glfwSwapInterval(1);
     gladLoadGLLoader((GLADloadproc) glfwGetProcAddress);
 
     glfwSetFramebufferSizeCallback(window, FramebufferSizeCallback);
@@ -145,6 +151,23 @@ int main(int argc, char* argv[])
     LoadModelsFromCSV(PATH_CSV);
 
     printf("\nTodos os modelos foram carregados com sucesso!\n\n");
+
+    g_Player->skinnedAsset = std::make_unique<SkinnedModelAsset>(
+        LoadSkinnedModel("../../data/Soldier/soldier_walk.fbx")
+    );
+   printf("[main] LoadSkinnedModel retornou\n"); fflush(stdout);
+
+    g_Player->animState.finalBoneMatrices.resize(
+        g_Player->skinnedAsset->boneCount, glm::mat4(1.0f));
+    printf("[main] animState resized\n"); fflush(stdout);
+
+    g_Player->animState.clipIndex = 0;
+    printf("[main] clipIndex set\n"); fflush(stdout);
+
+    // Compila o shader skinned separado
+    GLuint skVert = LoadShader_Vertex("../../src/shader_skinned_vertex.glsl");
+    GLuint skFrag = LoadShader_Fragment("../../src/shader_fragment.glsl");
+    g_Player->skinnedProgramID = CreateGpuProgram(skVert, skFrag);
 
     g_CollisionMesh = BuildCollisionMesh(g_ModelRegistry["map"], 0.05f);
 
