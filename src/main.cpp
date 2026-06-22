@@ -39,6 +39,7 @@
 #include "classes/objects/health_pack.h"
 #include "classes/objects/world_object.h"
 #include "classes/objects/gun.h"
+#include "classes/objects/armor.h"
 
 
 void LoadShadersFromFiles();
@@ -67,6 +68,7 @@ std::unique_ptr<Player> g_Player;
 std::vector<std::unique_ptr<Enemy>> g_Enemies;
 std::vector<std::unique_ptr<HealthPack>> g_HealthPacks;
 std::vector<std::unique_ptr<Gun>> g_Guns;
+std::vector<std::unique_ptr<Armor>> g_Armors;
 
 // =========================================================
 // Sistema de texturas
@@ -83,6 +85,18 @@ GLint g_bbox_min_uniform;
 GLint g_bbox_max_uniform;
 GLint g_texture_index_uniform;
 GLint g_has_texture_uniform;
+
+// Point lights
+GLint g_num_point_lights_uniform;
+GLint g_point_light_positions_uniform;
+GLint g_point_light_colors_uniform;
+GLint g_point_light_intensities_uniform;
+
+// Phong specular
+GLint g_camera_pos_uniform;
+GLint g_shininess_uniform;
+GLint g_specular_strength_uniform;
+GLint g_ambient_intensity_uniform;
 
 float g_ScreenRatio = 1.0f;
 
@@ -149,27 +163,35 @@ int main(int argc, char* argv[])
     g_CollisionMesh = BuildCollisionMesh(g_ModelRegistry["map"], 0.05f);
 
     // Objetos da cena
-    g_HealthPacks.push_back(std::make_unique<HealthPack>(glm::vec4( 5.0f, -1.0f,  5.0f, 1.0f), 0.5f));
-    g_HealthPacks.push_back(std::make_unique<HealthPack>(glm::vec4(-5.0f, -1.0f, -5.0f, 1.0f), 0.5f));
+    g_HealthPacks.push_back(std::make_unique<HealthPack>(glm::vec4( -2.56f, 5.50f, -158.36f, 1.0f), 1.0f));
+    g_HealthPacks.push_back(std::make_unique<HealthPack>(glm::vec4(-6.25f, 0.1f, -165.15f, 1.0f), 1.0f));
 
     g_Guns.push_back(std::make_unique<ShotGun>(glm::vec4( -5.0f, 1.0f, -10.0f, 1.0f), 0.05f, 10, 50));
     g_Guns.push_back(std::make_unique<Pistol>(glm::vec4(-10.0f, -1.0f, -10.0f, 1.0f), 2.0f, 15, 50));
 
+    g_Armors.push_back(std::make_unique<Armor>(glm::vec4(11.17f, 7.20f, -161.61f, 1.0f), 1.75f, 25, 100));
+
     g_Enemies.push_back(std::make_unique<Enemy>(
-        glm::vec4(-38.08f, 0.74f, -161.84f, 1.0f),
+        glm::vec4(-38.08f, 0.0f, -161.84f, 1.0f),
         PI / 4.0f,
-        std::array<glm::vec4, 4>{
-            glm::vec4(-15.0f, 0.0f, -10.0f, 1.0f),
-            glm::vec4( -5.0f, 0.0f, -10.0f, 1.0f),
-            glm::vec4( -5.0f, 0.0f,  -5.0f, 1.0f),
-            glm::vec4(-15.0f, 0.0f,  -5.0f, 1.0f)
+        std::vector<glm::vec4>{
+            glm::vec4(-43.0f, 0.0f, -167.7f, 1.0f),
+            glm::vec4(-38.0f, 0.0f, -167.7f, 1.0f),
+            glm::vec4(-38.0f, 0.0f, -155.48f, 1.0f),
+            glm::vec4(-43.0f, 0.0f, -155.48f, 1.0f),
+
+            // pontos extras do “∞”
+            glm::vec4(-40.5f, 0.0f, -161.0f, 1.0f),
+            glm::vec4(-41.5f, 0.0f, -158.0f, 1.0f),
+            glm::vec4(-39.5f, 0.0f, -164.0f, 1.0f),
+            glm::vec4(-40.5f, 0.0f, -161.0f, 1.0f)
         },
         EnemyState::Patrol
     ));
     g_Enemies.back()->collisionMesh = &g_CollisionMesh;
 
     g_Enemies.push_back(std::make_unique<Enemy>(
-        glm::vec4(-11.15f, -0.40f, -155.05f, 1.0f),
+        glm::vec4(-2.29f, 5.20f, -166.29f, 1.0f),
         0.0f,
         4.0f,
         EnemyState::Idle
@@ -247,6 +269,7 @@ int main(int argc, char* argv[])
         glUniformMatrix4fv(g_projection_uniform, 1, GL_FALSE, glm::value_ptr(projection));
 
         // ── Player ────────────────────────────────────────────
+        glUniform1f(g_ambient_intensity_uniform, 0.2f);
         g_Player->draw();
 
         // Hitbox do player
@@ -270,10 +293,64 @@ int main(int argc, char* argv[])
         glUniformMatrix4fv(g_view_uniform,       1, GL_FALSE, glm::value_ptr(view));
         glUniformMatrix4fv(g_projection_uniform, 1, GL_FALSE, glm::value_ptr(projection));
 
+        // ── Point Lights ────────────────────────────────────────
+        // Coleta objetos ativos como fontes de luz pontual
+        struct PointLight { glm::vec3 pos; glm::vec3 color; float intensity; };
+        PointLight pointLights[16];
+        int numPointLights = 0;
+
+        for (auto& obj : g_HealthPacks)
+            if (obj->active && !obj->consumed)
+                pointLights[numPointLights++] = {
+                    glm::vec3(obj->position), glm::vec3(0.0f, 1.0f, 0.0f), 0.5f // verde
+                };
+
+        for (auto& obj : g_Armors)
+            if (obj->active && !obj->consumed)
+                pointLights[numPointLights++] = {
+                    glm::vec3(obj->position), glm::vec3(1.0f, 1.0f, 0.0f), 0.5f // amarelo
+                };
+
+        for (auto& gun : g_Guns)
+            if (gun->active && !gun->consumed)
+                pointLights[numPointLights++] = {
+                    glm::vec3(gun->position), glm::vec3(1.0f, 0.6f, 0.0f), 0.4f // laranja
+                };
+
+        // Lâmpadas fixas — iluminação para baixo
+        pointLights[numPointLights++] = {
+            glm::vec3(-14.43f, 9.0f, 168.08f), glm::vec3(1.0f, 0.95f, 0.8f), 0.8f
+        };
+        pointLights[numPointLights++] = {
+            glm::vec3(-14.43f, 9.0f, -155.17f), glm::vec3(1.0f, 0.95f, 0.8f), 0.8f
+        };
+
+        glUniform1i(g_num_point_lights_uniform, numPointLights);
+        for (int i = 0; i < numPointLights; i++)
+        {
+            glUniform3fv(g_point_light_positions_uniform + i, 1,
+                         glm::value_ptr(pointLights[i].pos));
+            glUniform3fv(g_point_light_colors_uniform + i, 1,
+                         glm::value_ptr(pointLights[i].color));
+            glUniform1f(g_point_light_intensities_uniform + i,
+                        pointLights[i].intensity);
+        }
+
+        // ── Phong Specular ─────────────────────────────────────
+        glUniform3f(g_camera_pos_uniform,
+            g_Player->cameraPosition.x,
+            g_Player->cameraPosition.y,
+            g_Player->cameraPosition.z);
+        glUniform1f(g_shininess_uniform, 32.0f);
+        glUniform1f(g_specular_strength_uniform, 0.5f);
+
         // ── Mapa ──────────────────────────────────────────────
+        glUniform1f(g_ambient_intensity_uniform, 0.05f);
         glm::mat4 mapModelMatrix = Matrix_Scale(0.05f, 0.05f, 0.05f);
         DrawModel("map", mapModelMatrix);
         // O mapa não tem hitbox de bala, apenas colisão de movimento
+
+        glUniform1f(g_ambient_intensity_uniform, 0.2f);
 
         // ── Inimigos ──────────────────────────────────────────
         for (auto& enemy : g_Enemies)
@@ -348,6 +425,32 @@ int main(int argc, char* argv[])
             }
         }
 
+        // ── Armors ─────────────────────────────────────────────
+        for (auto& obj : g_Armors)
+        {
+            obj->update(deltaTime, g_Player.get());
+            obj->draw();
+
+            if (obj->active && !obj->consumed)
+            {
+                glm::mat4 objModel =
+                    Matrix_Translate(obj->position.x,
+                                     obj->position.y,
+                                     obj->position.z)
+                    * Matrix_Rotate_Y(obj->currentAngle)
+                    * obj->matrixScale;
+
+                glm::vec3 bmin, bmax;
+                GetModelBBox(obj->modelName, bmin, bmax);
+
+                HitboxRenderer::DrawHitbox(
+                    objModel, bmin, bmax,
+                    view, projection,
+                    HitboxColor::ITEM
+                );
+            }
+        }
+
         // ── HUD 
         if (g_ShowInfoText)
         {
@@ -394,6 +497,16 @@ void LoadShadersFromFiles()
     g_bbox_max_uniform      = glGetUniformLocation(g_GpuProgramID, "bbox_max");
     g_texture_index_uniform = glGetUniformLocation(g_GpuProgramID, "texture_index");
     g_has_texture_uniform   = glGetUniformLocation(g_GpuProgramID, "has_texture");
+
+    g_num_point_lights_uniform        = glGetUniformLocation(g_GpuProgramID, "u_num_point_lights");
+    g_point_light_positions_uniform   = glGetUniformLocation(g_GpuProgramID, "u_point_light_positions");
+    g_point_light_colors_uniform      = glGetUniformLocation(g_GpuProgramID, "u_point_light_colors");
+    g_point_light_intensities_uniform = glGetUniformLocation(g_GpuProgramID, "u_point_light_intensities");
+
+    g_camera_pos_uniform        = glGetUniformLocation(g_GpuProgramID, "u_camera_pos");
+    g_shininess_uniform         = glGetUniformLocation(g_GpuProgramID, "u_shininess");
+    g_specular_strength_uniform = glGetUniformLocation(g_GpuProgramID, "u_specular_strength");
+    g_ambient_intensity_uniform = glGetUniformLocation(g_GpuProgramID, "u_ambient_intensity");
 
     glUseProgram(g_GpuProgramID);
     glUseProgram(0);

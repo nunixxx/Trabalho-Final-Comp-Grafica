@@ -24,21 +24,67 @@ out vec4 color;
 #define M_PI   3.14159265358979323846
 #define M_PI_2 1.57079632679489661923
 
+#define MAX_POINT_LIGHTS 16
+
+uniform int   u_num_point_lights;
+uniform vec3  u_point_light_positions[MAX_POINT_LIGHTS];
+uniform vec3  u_point_light_colors[MAX_POINT_LIGHTS];
+uniform float u_point_light_intensities[MAX_POINT_LIGHTS];
+
+uniform vec3  u_camera_pos;
+uniform float u_shininess;
+uniform float u_specular_strength;
+uniform float u_ambient_intensity;
+
 void main()
 {
-    // Normal interpolada e normalizada
-    vec4 n = normalize(normal);
+    vec3 N = normalize(normal).xyz;
+    vec3 V = normalize(u_camera_pos - position_world.xyz);
 
     // Duas fontes de luz direcionais
-    vec4 l1 = normalize(vec4( 1.0,  1.5,  0.5, 0.0)); // luz principal (cima-direita-frente)
-    vec4 l2 = normalize(vec4(-1.0, -0.5, -1.0, 0.0)); // luz de preenchimento
+    vec3 L1 = normalize(vec3( 1.0,  1.5,  0.5));
+    vec3 L2 = normalize(vec3(-1.0, -0.5, -1.0));
 
-    float lambert1 = max(0.0, dot(n, l1));
-    float lambert2 = max(0.0, dot(n, l2)) * 0.3;
+    float NdotL1 = max(0.0, dot(N, L1));
+    float NdotL2 = max(0.0, dot(N, L2));
 
-    float ambient = 0.2;
-    float illumination = lambert1 + lambert2 + ambient;
-    // Clamp para não estourar
+    float ambient = u_ambient_intensity;
+    vec3 diffuse  = NdotL1 * vec3(1.0) + NdotL2 * 0.3 * vec3(1.0);
+    vec3 specular = vec3(0.0);
+
+    // Especular das direcionais
+    if (NdotL1 > 0.0)
+    {
+        vec3 R = reflect(-L1, N);
+        specular += pow(max(dot(R, V), 0.0), u_shininess) * vec3(1.0) * u_specular_strength;
+    }
+    if (NdotL2 > 0.0)
+    {
+        vec3 R = reflect(-L2, N);
+        specular += pow(max(dot(R, V), 0.0), u_shininess) * 0.3 * vec3(1.0) * u_specular_strength;
+    }
+
+    // Point lights dos objetos da cena
+    for (int i = 0; i < u_num_point_lights; i++)
+    {
+        vec3 light_vec = position_world.xyz - u_point_light_positions[i];
+        float dist = length(light_vec);
+        float atten = 1.0 / (1.0 + 0.03 * dist * dist);
+        vec3 L = normalize(light_vec);
+        float NdotL = max(0.0, dot(N, L));
+
+        diffuse += NdotL * u_point_light_colors[i] * u_point_light_intensities[i] * atten;
+
+        if (NdotL > 0.0)
+        {
+            vec3 R = reflect(-L, N);
+            specular += pow(max(dot(R, V), 0.0), u_shininess)
+                        * u_point_light_colors[i] * u_point_light_intensities[i] * atten
+                        * u_specular_strength;
+        }
+    }
+
+    vec3 illumination = vec3(ambient) + diffuse + specular;
     illumination = clamp(illumination, 0.0, 1.5);
 
     vec3 base_color;

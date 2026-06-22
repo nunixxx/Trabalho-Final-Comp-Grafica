@@ -5,4 +5,4 @@ enemy,Enemy/enemy.obj,enemy/,true
 pistol,Pistol/gun_marvin.obj,Pistol/,true
 shotgun,Shotgun/shotgunLoad.obj,Shotgun/,true
 healthpack,Healthpack/HealthpackTextured.Obj,Healthpack/,true
-armor,Armor/skullarmor.obj,Armor/,true
+armor,Armor/SM_Pickup_Armor.obj,Armor/,true

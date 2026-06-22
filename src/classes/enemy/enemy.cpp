@@ -9,7 +9,7 @@ void DrawModel(const std::string& model_name, glm::mat4 model_matrix);
 Enemy::Enemy(
     glm::vec4                        initialPosition,
     float                            initialYaw,
-    const std::array<glm::vec4, 4>&  bezierPoints,
+    const std::vector<glm::vec4>&    bezierPoints,
     EnemyState                       initialState,
     float                            visionRadius,
     float                            movementSpeed,
@@ -25,7 +25,7 @@ Enemy::Enemy(
     , bezierT(0.0f)
     , bezierSpeed(0.08f)
     , visionRadius(visionRadius)
-    , gunModelName("pistol")
+    , gunModelName("")
     , gunModelScale(Matrix_Scale(2.0f, 2.0f, 2.0f))
     , verticalVelocity(0.0f)
     , onGround(true)
@@ -66,7 +66,7 @@ Enemy::Enemy(
     , bezierT(0.0f)
     , bezierSpeed(0.08f)
     , visionRadius(10.0f)
-    , gunModelName("pistol")
+    , gunModelName("")
     , gunModelScale(Matrix_Scale(2.0f, 2.0f, 2.0f))
     , verticalVelocity(0.0f)
     , onGround(true)
@@ -78,14 +78,10 @@ Enemy::Enemy(
     matrixScale = SOLDIERS_SCALE;
     active      = true;
 
-    // Gera os 4 pontos de controle ao redor do spawn
-    float r = patrolRadius;
-    float y = initialPosition.y;
-
-    bezierControlPoints[0] = initialPosition;
-    bezierControlPoints[1] = glm::vec4(initialPosition.x + r,  y, initialPosition.z + r,  1.0f);
-    bezierControlPoints[2] = glm::vec4(initialPosition.x + r,  y, initialPosition.z - r,  1.0f);
-    bezierControlPoints[3] = glm::vec4(initialPosition.x - r,  y, initialPosition.z,      1.0f);
+   bezierControlPoints = CreateCircularPath(
+        initialPosition,
+        patrolRadius
+    );
 }
 
 // =========================================================
@@ -330,4 +326,33 @@ glm::mat4 Enemy::buildGunMatrix_() const
 void Enemy::applyGravity_(float deltaTime)
 {
     verticalVelocity += GRAVITY * deltaTime;
+}
+
+// =========================================================
+// CreateCircularPath  (privado)
+// 
+// Gera um conjunto de pontos de controle para uma rota circular
+// ao redor de um centro dado e com raio especificado.
+// =========================================================
+
+std::vector<glm::vec4> Enemy::CreateCircularPath(
+    glm::vec4 center,
+    float radius
+)
+{
+    std::vector<glm::vec4> points;
+
+    for (int i = 0; i < 32; i++)
+    {
+        float t = (2.0f * PI * i) / 32.0f;
+
+        points.push_back(glm::vec4(
+            center.x + radius * cos(t),
+            center.y,
+            center.z + radius * sin(t),
+            1.0f
+        ));
+    }
+
+    return points;
 }

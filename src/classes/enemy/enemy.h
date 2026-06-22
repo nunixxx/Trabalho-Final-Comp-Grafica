@@ -9,6 +9,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <vector>
 #include <algorithm>
 
 #include "../../constants.h"   // PI, SOLDIERS_SCALE
@@ -74,7 +75,7 @@ public:
     // Bézier cúbica — 4 pontos de controle no plano XZ
     // O Y é mantido constante (nível do chão) durante o patrol.
     // ----------------------------------------------------------
-    std::array<glm::vec4, 4> bezierControlPoints;
+    std::vector<glm::vec4> bezierControlPoints;
 
     // Parâmetro t ∈ [0, 1] que avança ao longo da curva.
     // Quando chega em 1 reinicia em 0 (loop).
@@ -103,7 +104,7 @@ public:
     Enemy(
         glm::vec4                        initialPosition,
         float                            initialYaw,
-        const std::array<glm::vec4, 4>&  bezierPoints,
+        const std::vector<glm::vec4>&    bezierPoints,
         EnemyState                       initialState  = EnemyState::Idle,
         float                            visionRadius  = 10.0f,
         float                            movementSpeed = 2.0f,
@@ -165,4 +166,6 @@ private:
 
     // Aplica gravidade ao inimigo, atualizando verticalVelocity e position.y.
     void applyGravity_(float deltaTime);
+
+    std::vector<glm::vec4> CreateCircularPath( glm::vec4 center, float radius);
 };
