@@ -26,5 +26,6 @@ glm::mat4 GameObject::buildModelMatrix() const
 void GameObject::draw()
 {
     if (!active) return;
-    DrawModel(modelName, buildModelMatrix());
+    std::string model = animator.hasClip(animator.getCurrentClip()) ? animator.getCurrentModel() : modelName;
+    DrawModel(model, buildModelMatrix());
 }

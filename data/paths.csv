@@ -6,3 +6,11 @@ pistol,Pistol/gun_marvin.obj,Pistol/,true
 shotgun,Shotgun/shotgunLoad.obj,Shotgun/,true
 healthpack,Healthpack/HealthpackTextured.Obj,Healthpack/,true
 armor,Armor/skullarmor.obj,Armor/,true
+soldier_walk_00,Soldier/walk_frames/walk_00.obj,Soldier/,true
+soldier_walk_01,Soldier/walk_frames/walk_01.obj,Soldier/,true
+soldier_walk_02,Soldier/walk_frames/walk_02.obj,Soldier/,true
+soldier_walk_03,Soldier/walk_frames/walk_03.obj,Soldier/,true
+soldier_walk_04,Soldier/walk_frames/walk_04.obj,Soldier/,true
+soldier_walk_05,Soldier/walk_frames/walk_05.obj,Soldier/,true
+soldier_walk_06,Soldier/walk_frames/walk_06.obj,Soldier/,true
+soldier_walk_07,Soldier/walk_frames/walk_07.obj,Soldier/,true

@@ -51,6 +51,26 @@ Player::Player(
     // Captura posição inicial do cursor para evitar salto no primeiro frame
     if (window)
         glfwGetCursorPos(window, &lastCursorX_, &lastCursorY_);
+
+    // ── Configura animações ──────────────────────────────────
+    AnimationClip idleClip;
+    idleClip.name = "idle";
+    idleClip.frameModels = { "soldier" };
+    idleClip.frameDuration = 1.0f;
+    idleClip.loop = true;
+    animator.addClip(idleClip);
+
+    AnimationClip walkClip;
+    walkClip.name = "walk";
+    walkClip.frameModels = {
+        "soldier_walk_00", "soldier_walk_01", "soldier_walk_02", "soldier_walk_03",
+        "soldier_walk_04", "soldier_walk_05", "soldier_walk_06", "soldier_walk_07"
+    };
+    walkClip.frameDuration = 0.1f;
+    walkClip.loop = true;
+    animator.addClip(walkClip);
+
+    animator.play("idle");
 }
 
 // =========================================================
@@ -61,6 +81,20 @@ Player::Player(
 void Player::update(float deltaTime)
 {
     if (!active) return;
+
+    isMoving = onGround && (
+        glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS ||
+        glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS ||
+        glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS ||
+        glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS
+    );
+
+    if (isMoving && animator.getCurrentClip() != "walk")
+        animator.play("walk");
+    else if (!isMoving && animator.getCurrentClip() != "idle")
+        animator.play("idle");
+
+    animator.update(deltaTime);
 
     // Atualiza cooldown de tiro
     if (shootCooldown > 0.0f)
@@ -88,7 +122,7 @@ void Player::draw()
     if (!active) return;
     if (cameraMode == CameraMode::FirstPerson) return;
 
-    DrawModel(modelName, buildModelMatrix());
+    DrawModel(animator.getCurrentModel(), buildModelMatrix());
 }
 // =========================================================
 // onCollision

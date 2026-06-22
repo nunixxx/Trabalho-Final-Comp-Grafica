@@ -33,6 +33,23 @@ Enemy::Enemy(
     yaw         = initialYaw;
     matrixScale = SOLDIERS_SCALE;
     active      = true;
+
+    // ── Configura animações ──────────────────────────────────
+    AnimationClip idleClip;
+    idleClip.name = "idle";
+    idleClip.frameModels = { "enemy" };
+    idleClip.frameDuration = 1.0f;
+    idleClip.loop = true;
+    animator.addClip(idleClip);
+
+    AnimationClip walkClip;
+    walkClip.name = "walk";
+    walkClip.frameModels = { "enemy" };
+    walkClip.frameDuration = 0.2f;
+    walkClip.loop = true;
+    animator.addClip(walkClip);
+
+    animator.play("idle");
 }
 
 // =========================================================
@@ -80,6 +97,23 @@ Enemy::Enemy(
     bezierControlPoints[1] = glm::vec4(initialPosition.x + r,  y, initialPosition.z + r,  1.0f);
     bezierControlPoints[2] = glm::vec4(initialPosition.x + r,  y, initialPosition.z - r,  1.0f);
     bezierControlPoints[3] = glm::vec4(initialPosition.x - r,  y, initialPosition.z,      1.0f);
+
+    // ── Configura animações ──────────────────────────────────
+    AnimationClip idleClip;
+    idleClip.name = "idle";
+    idleClip.frameModels = { "enemy" };
+    idleClip.frameDuration = 1.0f;
+    idleClip.loop = true;
+    animator.addClip(idleClip);
+
+    AnimationClip walkClip;
+    walkClip.name = "walk";
+    walkClip.frameModels = { "enemy" };
+    walkClip.frameDuration = 0.2f;
+    walkClip.loop = true;
+    animator.addClip(walkClip);
+
+    animator.play("idle");
 }
 
 // =========================================================
@@ -110,11 +144,31 @@ void Enemy::update(float deltaTime, const Player* player)
     }
 
     if (state == EnemyState::Idle)
-        return;  // parado, não faz nada
+    {
+        if (animator.getCurrentClip() != "idle")
+            animator.play("idle");
+        animator.update(deltaTime);
+        return;
+    }
+    else if (state == EnemyState::Dead)
+    {
+        animator.stop();
+        return;
+    }
     else if (state == EnemyState::Patrol)
+    {
+        if (animator.getCurrentClip() != "walk")
+            animator.play("walk");
+        animator.update(deltaTime);
         updatePatrol_(deltaTime);
+    }
     else if (state == EnemyState::Chase && player)
+    {
+        if (animator.getCurrentClip() != "walk")
+            animator.play("walk");
+        animator.update(deltaTime);
         updateChase_(deltaTime, player);
+    }
 }
 
 // =========================================================
@@ -125,7 +179,8 @@ void Enemy::draw()
 {
     if (!active || state == EnemyState::Dead) return;
 
-    DrawModel(modelName,    buildModelMatrix());
+    std::string bodyModel = animator.hasClip(animator.getCurrentClip()) ? animator.getCurrentModel() : modelName;
+    DrawModel(bodyModel,    buildModelMatrix());
     DrawModel(gunModelName, buildGunMatrix_());
 }
 

@@ -4,6 +4,7 @@
 #include <glm/vec4.hpp>
 #include <glm/mat4x4.hpp>
 
+#include "../animation/animation.h"
 #include <../include/matrices.h>   // Matrix_Translate, Matrix_Rotate_Y — já usadas em main.cpp
 
 
@@ -35,7 +36,13 @@ public:
     glm::mat4   matrixScale;    // escala do modelo (ex: Matrix_Scale(0.1f,...))
 
     // ----------------------------------------------------------
+    // Sistema de animação
+    // ----------------------------------------------------------
+    Animator animator;
+
+    // ----------------------------------------------------------
     // Referência ao modelo 3D (chave em g_ModelRegistry)
+    // Usado como fallback quando o Animator não tem clips.
     // ----------------------------------------------------------
     std::string modelName;
 

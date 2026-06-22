@@ -15,6 +15,7 @@ set(SOURCES
   src/modelRendering/model_rendering.cpp
   src/collision/collision.cpp
   src/textureRendering/texture_rendering.cpp
+  src/animation/animation.cpp
   src/classes/game_object.cpp
   src/classes/player/player.cpp
   src/classes/enemy/enemy.cpp

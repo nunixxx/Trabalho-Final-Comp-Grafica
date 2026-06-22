@@ -65,7 +65,8 @@ void WorldObject::update(float deltaTime, Player* player)
 void WorldObject::draw()
 {
     if (!active || consumed) return;
-    DrawModel(modelName, buildAnimatedMatrix_());
+    std::string model = animator.hasClip(animator.getCurrentClip()) ? animator.getCurrentModel() : modelName;
+    DrawModel(model, buildAnimatedMatrix_());
 }
 
 // =========================================================
