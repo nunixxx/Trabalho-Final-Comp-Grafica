@@ -267,13 +267,38 @@ void Player::updateLookAtCamera_()
     float r = cameraDistance;
     float y = r * sin(cameraPhi);
 
-    // A câmera fica atrás do personagem: ângulo oposto ao yaw
     float behindAngle = yaw + PI;
     float z = r * cos(cameraPhi) * cos(behindAngle);
     float x = r * cos(cameraPhi) * sin(behindAngle);
 
-    lookAtTarget_    = position + glm::vec4(0.0f, 1.8f, 0.0f, 0.0f);
-    cameraPosition   = lookAtTarget_ + glm::vec4(x, y, z, 0.0f);
+    lookAtTarget_  = position + glm::vec4(0.0f, 1.8f, 0.0f, 0.0f);
+
+    // posição ideal (sem colisão) 
+    glm::vec3 target   = glm::vec3(lookAtTarget_);
+    glm::vec3 idealPos = target + glm::vec3(x, y, z);
+
+    // distância segura com colisão
+    float safeDist = cameraDistance;
+    if (collisionMesh)
+    {
+        safeDist = SafeCameraDistance(
+            *collisionMesh, target, idealPos, cameraDistance);
+    }
+
+    // suavização da distância (evita "teleporte")
+    // Aproxima instantaneamente quando a câmera colide (pull-in),
+    // mas retorna devagar quando o obstáculo sai do caminho (pull-out).
+    static float smoothDist = cameraDistance;
+    if (safeDist < smoothDist)
+        smoothDist = safeDist;                          // pull-in: imediato
+    else
+        smoothDist += (safeDist - smoothDist) * 0.08f; // pull-out: suave
+
+    // Reconstrói a posição final com a distância suavizada
+    float ratio   = smoothDist / (cameraDistance + 1e-6f);
+    glm::vec4 finalPos = lookAtTarget_ + glm::vec4(x * ratio, y * ratio, z * ratio, 0.0f);
+
+    cameraPosition   = finalPos;
     cameraViewVector = lookAtTarget_ - cameraPosition;
 }
 

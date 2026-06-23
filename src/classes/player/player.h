@@ -16,6 +16,7 @@
 #include "../../collision/collision.h"     
 #include "../../../include/matrices.h"      // Matrix_Translate, Matrix_Rotate_Y, norm, crossproduct, normalize
 #include "../../animation/animator.h"
+#include "../../collision/camera_collision.h"
 
 
 #include <GLFW/glfw3.h>

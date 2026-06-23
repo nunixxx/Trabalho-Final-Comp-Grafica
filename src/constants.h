@@ -6,8 +6,8 @@
 
 #define MAX_TEXTURES 128
 #define PI 3.141592f
-#define WINDOW_SIZE_X 800
-#define WINDOW_SIZE_Y 600
+#define WINDOW_SIZE_X 1920
+#define WINDOW_SIZE_Y 1080
 
 #define PATH_CSV "../../data/paths.csv"
 

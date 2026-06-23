@@ -24,6 +24,7 @@ set(SOURCES
   src/hitbox/hitbox_renderer.cpp
   src/classes/objects/armor.cpp
   src/animation/animator.cpp
+  src/collision/camera_collision.cpp
 )
 
 cmake_minimum_required(VERSION 3.10)
