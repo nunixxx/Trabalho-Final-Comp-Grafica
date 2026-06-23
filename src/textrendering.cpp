@@ -31,7 +31,7 @@ const GLchar* const textfragmentshader_source = ""
 "out vec4 fragColor;\n"
 "void main()\n"
 "{\n"
-    "fragColor = vec4(0, 0, 0, texture(tex, texCoords).r);\n"
+    "fragColor = vec4(1, 1, 1, texture(tex, texCoords).r);\n"
 "}\n"
 "\0";
 
@@ -117,7 +117,7 @@ void TextRendering_Init()
     texttex_uniform = glGetUniformLocation(textprogram_id, "tex");
     glCheckError();
 
-    GLuint textureunit = 31;
+    GLuint textureunit = 127;
     glActiveTexture(GL_TEXTURE0 + textureunit);
     glBindTexture(GL_TEXTURE_2D, texttexture_id);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, dejavufont.tex_width, dejavufont.tex_height, 0, GL_RED, GL_UNSIGNED_BYTE, dejavufont.tex_data);
