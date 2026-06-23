@@ -505,7 +505,7 @@ void Player::shoot(std::vector<std::unique_ptr<Enemy>>& enemies,
 {
     if (shootCooldown > 0.0f || ammo <= 0) return;
 
-    shootCooldown = 0.5f;  // meio segundo entre tiros
+    shootCooldown = 0.25f;  // meio segundo entre tiros
     ammo--;
 
     // Origem no muzzle e direção = centro da tela (crosshair)

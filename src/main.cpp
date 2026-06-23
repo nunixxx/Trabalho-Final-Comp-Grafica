@@ -41,6 +41,7 @@
 #include "classes/objects/gun.h"
 #include "classes/objects/armor.h"
 #include "laser/laser.h"
+#include "hud/hud.h"
 
 
 void LoadShadersFromFiles();
@@ -56,6 +57,7 @@ float TextRendering_LineHeight(GLFWwindow* window);
 float TextRendering_CharWidth(GLFWwindow* window);
 void TextRendering_PrintString(GLFWwindow* window, const std::string &str, float x, float y, float scale = 1.0f);
 void TextRendering_ShowFramesPerSecond(GLFWwindow* window);
+void TextRendering_SetColor(float r, float g, float b, float a);
 
 void FramebufferSizeCallback(GLFWwindow* window, int width, int height);
 void ErrorCallback(int error, const char* description);
@@ -108,6 +110,7 @@ bool g_MiddleMouseButtonPressed = false;
 CollisionMesh g_CollisionMesh;
 
 bool g_ShowInfoText = true;
+HUD  g_HUD;
 
 GLuint g_GpuProgramID = 0;
 
@@ -206,6 +209,7 @@ int main(int argc, char* argv[])
     );
 
     TextRendering_Init();
+    g_HUD.init();
     HitboxRenderer::Init();
     LaserRenderer::Init();
 
@@ -456,130 +460,10 @@ int main(int argc, char* argv[])
         LaserRenderer::Update(deltaTime);
         LaserRenderer::Render(view, projection);
 
-        // ── HUD estilo Doom ──────────────────────────────────────
+        // ── HUD ───────────────────────────────────────────────────
+        g_HUD.update(deltaTime, *g_Player);
         if (g_ShowInfoText)
-        {
-            float lh = TextRendering_LineHeight(window);
-            float cw = TextRendering_CharWidth(window);
-
-            // =====================================================
-            // Posição base da HUD: canto inferior esquerdo
-            // =====================================================
-            float hudY  = -1.0f + lh * 1.5f;   // linha de fundo
-            float hudY2 = hudY  + lh * 1.2f;   // linha de cima
-
-            // =====================================================
-            // HP — barra colorida com texto
-            // A barra usa blocos '|' para simular preenchimento.
-            // Cor: verde > 60%, amarelo > 30%, vermelho <= 30%
-            // =====================================================
-            const int   HP_MAX    = PLAYER_MAX_HEALTH;
-            const int   hp        = g_Player->health;
-            const float hpFrac    = (float)hp / HP_MAX;
-            const int   BAR_LEN   = 10;  // número de blocos da barra
-            int         hpFilled  = (int)(hpFrac * BAR_LEN + 0.5f);
-            if (hpFilled > BAR_LEN) hpFilled = BAR_LEN;
-
-            // Monta string da barra: [||||      ]
-            std::string hpBar = "[";
-            for (int i = 0; i < BAR_LEN; i++)
-                hpBar += (i < hpFilled) ? '|' : ' ';
-            hpBar += "]";
-
-            // Label + número
-            char hpStr[32];
-            snprintf(hpStr, 32, "HP  %3d%%", (int)(hpFrac * 100));
-
-            float hpX = -1.0f + cw * 1.5f;
-            TextRendering_PrintString(window, "HP", hpX, hudY2, 1.0f);
-            TextRendering_PrintString(window, hpBar, hpX, hudY, 1.0f);
-            char hpNum[8];
-            snprintf(hpNum, 8, "%3d", hp);
-            TextRendering_PrintString(window, hpNum, hpX + cw * 13.0f, hudY, 1.0f);
-
-            // =====================================================
-            // ROSTO central — muda com o HP (estilo Doom face)
-            //   > 60% HP : O_O  (normal)
-            //   > 30% HP : -_-  (machucado)
-            //   <= 30%HP : x_x  (crítico)
-            // =====================================================
-            const char* faceTop;
-            const char* faceMid;
-            const char* faceBot;
-
-            if (hpFrac > 0.60f)
-            {
-                faceTop = " ___  ";
-                faceMid = "| O O|";
-                faceBot = "|  ~ |";
-            }
-            else if (hpFrac > 0.30f)
-            {
-                faceTop = " ___  ";
-                faceMid = "| - -|";
-                faceBot = "|  _ |";
-            }
-            else
-            {
-                faceTop = " ___  ";
-                faceMid = "| x x|";
-                faceBot = "|  v |";
-            }
-
-            // Centraliza o rosto na tela
-            float faceX = -cw * 3.0f;
-            TextRendering_PrintString(window, faceTop, faceX, hudY2 + lh * 0.5f, 1.0f);
-            TextRendering_PrintString(window, faceMid, faceX, hudY2 - lh * 0.1f, 1.0f);
-            TextRendering_PrintString(window, faceBot, faceX, hudY,               1.0f);
-
-            // =====================================================
-            // ARMADURA — lado direito do rosto
-            // =====================================================
-            const int   ARM_MAX   = 100;
-            const int   arm       = g_Player->armor;
-            const float armFrac   = (float)arm / ARM_MAX;
-            int         armFilled = (int)(armFrac * BAR_LEN + 0.5f);
-            if (armFilled > BAR_LEN) armFilled = BAR_LEN;
-
-            std::string armBar = "[";
-            for (int i = 0; i < BAR_LEN; i++)
-                armBar += (i < armFilled) ? '|' : ' ';
-            armBar += "]";
-
-            float armX = cw * 7.0f;
-            TextRendering_PrintString(window, "ARM", armX, hudY2, 1.0f);
-            TextRendering_PrintString(window, armBar, armX, hudY, 1.0f);
-            char armNum[8];
-            snprintf(armNum, 8, "%3d", arm);
-            TextRendering_PrintString(window, armNum, armX + cw * 13.0f, hudY, 1.0f);
-
-            // =====================================================
-            // MUNIÇÃO — canto inferior direito
-            // =====================================================
-            const int   AMMO_MAX   = 60;
-            const int   ammo       = g_Player->ammo;
-            const float ammoFrac   = std::min(1.0f, (float)ammo / AMMO_MAX);
-            int         ammoFilled = (int)(ammoFrac * BAR_LEN + 0.5f);
-            if (ammoFilled > BAR_LEN) ammoFilled = BAR_LEN;
-
-            std::string ammoBar = "[";
-            for (int i = 0; i < BAR_LEN; i++)
-                ammoBar += (i < ammoFilled) ? '|' : ' ';
-            ammoBar += "]";
-
-            float ammoX = 1.0f - cw * 17.0f;
-            TextRendering_PrintString(window, "AMMO", ammoX, hudY2, 1.0f);
-            TextRendering_PrintString(window, ammoBar, ammoX, hudY, 1.0f);
-            char ammoNum[8];
-            snprintf(ammoNum, 8, "%3d", ammo);
-            TextRendering_PrintString(window, ammoNum, ammoX + cw * 13.0f, hudY, 1.0f);
-
-            // =====================================================
-            // Mira (crosshair) — centro da tela
-            // =====================================================
-            if(g_Player->isFirstPerson())
-                TextRendering_PrintString(window, "+", -cw * 0.5f, lh * 0.5f, 2.0f);
-        }
+            g_HUD.render(window, *g_Player);
 
         TextRendering_ShowFramesPerSecond(window);
 

@@ -26,6 +26,7 @@ set(SOURCES
   src/animation/animator.cpp
   src/collision/camera_collision.cpp
   src/laser/laser.cpp
+  src/hud/hud.cpp
 )
 
 cmake_minimum_required(VERSION 3.10)
