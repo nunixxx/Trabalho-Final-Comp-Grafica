@@ -25,6 +25,7 @@ set(SOURCES
   src/classes/objects/armor.cpp
   src/animation/animator.cpp
   src/collision/camera_collision.cpp
+  src/laser/laser.cpp
 )
 
 cmake_minimum_required(VERSION 3.10)

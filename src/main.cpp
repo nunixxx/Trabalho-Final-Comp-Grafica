@@ -40,6 +40,7 @@
 #include "classes/objects/world_object.h"
 #include "classes/objects/gun.h"
 #include "classes/objects/armor.h"
+#include "laser/laser.h"
 
 
 void LoadShadersFromFiles();
@@ -166,8 +167,7 @@ int main(int argc, char* argv[])
     g_HealthPacks.push_back(std::make_unique<HealthPack>(glm::vec4( -2.56f, 5.50f, -158.36f, 1.0f), 1.0f));
     g_HealthPacks.push_back(std::make_unique<HealthPack>(glm::vec4(-6.25f, 0.1f, -165.15f, 1.0f), 1.0f));
 
-    g_Guns.push_back(std::make_unique<ShotGun>(glm::vec4( -5.0f, 1.0f, -10.0f, 1.0f), 0.05f, 10, 50));
-    g_Guns.push_back(std::make_unique<Pistol>(glm::vec4(-10.0f, -1.0f, -10.0f, 1.0f), 2.0f, 15, 50));
+    g_Guns.push_back(std::make_unique<Pistol>(glm::vec4(-6.25f, 3.1f, -165.15f, 1.0f), 2.0f, 15, 50));
 
     g_Armors.push_back(std::make_unique<Armor>(glm::vec4(11.17f, 7.20f, -161.61f, 1.0f), 1.75f, 25, 100));
 
@@ -207,6 +207,7 @@ int main(int argc, char* argv[])
 
     TextRendering_Init();
     HitboxRenderer::Init();
+    LaserRenderer::Init();
 
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
@@ -450,6 +451,10 @@ int main(int argc, char* argv[])
                 );
             }
         }
+
+        // ── Laser ────────────────────────────────────────────────
+        LaserRenderer::Update(deltaTime);
+        LaserRenderer::Render(view, projection);
 
         // ── HUD estilo Doom ──────────────────────────────────────
         if (g_ShowInfoText)

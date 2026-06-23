@@ -13,3 +13,13 @@ float SafeCameraDistance(
     float                idealDist,    // cameraDistance atual
     float                minDist = 0.5f
 );
+
+// Dispara um raio da origem na direção (normalizada) contra a malha de colisão.
+// Retorna true se atingir algo dentro de maxDist, e preenche outHitDist com a distância.
+bool RayCastMesh(
+    const CollisionMesh& mesh,
+    const glm::vec3&     origin,
+    const glm::vec3&     direction,
+    float                maxDist,
+    float&               outHitDist
+);

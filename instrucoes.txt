@@ -1,0 +1,28 @@
+Quero implementar um sistema de disparo em modo First Person.
+
+Ao atirar, desejo adicionar uma animação visual de laser/projétil energético saindo da ponta da arma e funcionando da seguinte forma:
+
+Requisitos:
+
+O laser deve nascer exatamente no cano (muzzle) da arma, e não no centro da câmera.
+A direção do disparo deve sempre apontar para o centro da tela (crosshair), garantindo que o tiro acerte onde o jogador está mirando.
+O laser deve possuir uma animação visual de deslocamento (não aparecer instantaneamente no destino).
+O laser deve avançar continuamente até:
+colidir com algum objeto do cenário; ou
+atingir sua distância máxima.
+Ao colidir:
+interromper imediatamente o movimento;
+encerrar o efeito visual no ponto de impacto;
+opcionalmente gerar efeito de impacto (partículas, brilho ou decal).
+O sistema deve respeitar colisão com:
+paredes;
+chão;
+objetos sólidos do mapa;
+inimigos (se existir sistema de entidades).
+
+Peço que implemente utilizando uma abordagem adequada (raycast + efeito visual do laser, ou projétil físico, conforme fizer mais sentido para FPS), explicando:
+
+como calcular a direção usando o centro da tela;
+como alinhar o disparo com a arma em First Person;
+como detectar colisão;
+como renderizar e atualizar a animação do laser.

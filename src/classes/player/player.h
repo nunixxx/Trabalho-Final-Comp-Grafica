@@ -17,6 +17,7 @@
 #include "../../../include/matrices.h"      // Matrix_Translate, Matrix_Rotate_Y, norm, crossproduct, normalize
 #include "../../animation/animator.h"
 #include "../../collision/camera_collision.h"
+#include "../../laser/laser.h"
 
 
 #include <GLFW/glfw3.h>
@@ -146,7 +147,10 @@ public:
     // Ações do jogador
     // ----------------------------------------------------------
 
-    // Dispara um tiro testando colisão com inimigos.
+    // Retorna a posição do cano da arma (muzzle) em FirstPerson.
+    glm::vec4 getMuzzlePosition() const;
+
+    // Dispara um tiro com raycast e laser visual.
     void shoot(std::vector<std::unique_ptr<Enemy>>& enemies,
            const std::map<std::string, ModelAsset>& modelRegistry);
 

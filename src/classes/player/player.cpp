@@ -462,9 +462,42 @@ bool Player::handleJump_()
 }
 
 // =========================================================
+// getMuzzlePosition (publico)
+// Calcula a posição do cano da arma (muzzle) em modo FirstPerson.
+// =========================================================
+
+glm::vec4 Player::getMuzzlePosition() const
+{
+    // Direção frontal da câmera
+    glm::vec3 front(
+        cos(CamPitch) * cos(CamYaw),
+        sin(CamPitch),
+        cos(CamPitch) * sin(CamYaw)
+    );
+
+    glm::vec3 worldUp(0.0f, 1.0f, 0.0f);
+    glm::vec3 right = glm::normalize(glm::cross(front, worldUp));
+    glm::vec3 up    = glm::normalize(glm::cross(right, front));
+
+    glm::vec3 eyePos(cameraPosition.x, cameraPosition.y, cameraPosition.z);
+
+    // Muzzle um pouco mais à frente que o centro da arma (0.9 vs 0.6)
+    const float forwardOffset = 0.9f;
+    const float rightOffset   = 0.25f;
+    const float downOffset    = -0.25f;
+
+    glm::vec3 muzzlePos = eyePos
+        + front * forwardOffset
+        + right * rightOffset
+        + up    * downOffset;
+
+    return glm::vec4(muzzlePos, 1.0f);
+}
+
+// =========================================================
 // shoot (publico)
-// Verifica se o tiro pode ser disparado (cooldown e munição), então dispara um raio
-// da posição da câmera na direção que ela aponta, testando colisão com inimigos.
+// Dispara um raio do cano da arma (muzzle) na direção da mira,
+// testando colisão com o mapa e com inimigos, e inicia o laser.
 // =========================================================
 
 void Player::shoot(std::vector<std::unique_ptr<Enemy>>& enemies,
@@ -475,26 +508,34 @@ void Player::shoot(std::vector<std::unique_ptr<Enemy>>& enemies,
     shootCooldown = 0.5f;  // meio segundo entre tiros
     ammo--;
 
-    // Origem e direção do raio (da câmera para onde está olhando)
-    glm::vec3 origin(cameraPosition.x, cameraPosition.y, cameraPosition.z);
+    // Origem no muzzle e direção = centro da tela (crosshair)
+    glm::vec3 origin(getMuzzlePosition());
     glm::vec3 dir(cameraViewVector.x, cameraViewVector.y, cameraViewVector.z);
     float dirLen = glm::length(dir);
     if (dirLen < 1e-8f) return;
     dir /= dirLen;
 
-    // Testa contra cada inimigo vivo
-    float  closestT   = std::numeric_limits<float>::max();
-    int    closestIdx = -1;
+    const float MAX_RANGE = 60.0f;
 
-    for (int i = 0; i < (int)enemies.size(); i++) 
+    // --- Raycast contra o mapa (paredes/chão) ---
+    float mapHitDist = MAX_RANGE;
+    bool  hitMap     = false;
+    if (collisionMesh)
+    {
+        hitMap = RayCastMesh(*collisionMesh, origin, dir, MAX_RANGE, mapHitDist);
+    }
+
+    // --- Raycast contra inimigos ---
+    float enemyHitDist = MAX_RANGE;
+    int   enemyIdx     = -1;
+
+    for (int i = 0; i < (int)enemies.size(); i++)
     {
         if (!enemies[i]->active) continue;
 
-        // Pega bbox do modelo do inimigo
         auto it = modelRegistry.find(enemies[i]->modelName);
         if (it == modelRegistry.end() || it->second.parts.empty()) continue;
 
-        // Calcula AABB em espaço de mundo
         glm::vec3 bmin(std::numeric_limits<float>::max());
         glm::vec3 bmax(std::numeric_limits<float>::lowest());
         for (const auto& part : it->second.parts)
@@ -503,7 +544,6 @@ void Player::shoot(std::vector<std::unique_ptr<Enemy>>& enemies,
             bmax = glm::max(bmax, part.bbox_max);
         }
 
-        // Aplica escala e posição do inimigo
         glm::vec3 scale(enemies[i]->matrixScale[0][0],
                         enemies[i]->matrixScale[1][1],
                         enemies[i]->matrixScale[2][2]);
@@ -517,21 +557,46 @@ void Player::shoot(std::vector<std::unique_ptr<Enemy>>& enemies,
         float t;
         if (RayVsAABB(origin, dir, worldMin, worldMax, t))
         {
-            if (t < closestT)
+            if (t < enemyHitDist)
             {
-                closestT   = t;
-                closestIdx = i;
+                enemyHitDist = t;
+                enemyIdx     = i;
             }
         }
     }
 
-    if (closestIdx >= 0)
+    // --- Decide o hit mais próximo ---
+    float finalDist = MAX_RANGE;
+    bool  hitEnemy  = false;
+    int   hitEnemyIdx = -1;
+
+    if (hitMap && mapHitDist < enemyHitDist)
     {
-        enemies[closestIdx]->takeDamage(35, this);
-        printf("[Player] Acertou inimigo %d! Dano: 35\n", closestIdx);
+        finalDist = mapHitDist;
+    }
+    else if (enemyIdx >= 0)
+    {
+        finalDist     = enemyHitDist;
+        hitEnemy      = true;
+        hitEnemyIdx   = enemyIdx;
+    }
+
+    // --- Aplica dano ao inimigo ---
+    if (hitEnemy)
+    {
+        enemies[hitEnemyIdx]->takeDamage(35, this);
+        printf("[Player] Acertou inimigo %d! Dano: 35 (dist=%.2f)\n",
+               hitEnemyIdx, finalDist);
+    }
+    else if (hitMap)
+    {
+        printf("[Player] Acertou parede! (dist=%.2f)\n", finalDist);
     }
     else
     {
-        printf("[Player] Errou!\n");
+        printf("[Player] Errou! (dist=%.2f)\n", finalDist);
     }
+
+    // --- Spawna o laser ---
+    LaserRenderer::Spawn(origin, dir, finalDist, hitEnemy, hitEnemyIdx);
 }

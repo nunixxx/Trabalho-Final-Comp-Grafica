@@ -1,4 +1,4 @@
- #include "camera_collision.h"
+#include "camera_collision.h"
 #include <cmath>
 #include <algorithm>
 
@@ -61,4 +61,38 @@ float SafeCameraDistance(
 
     // Garante distância mínima e deixa um offset de 0.2 antes da parede
     return std::max(minDist, closestT - 0.2f);
+}
+
+bool RayCastMesh(
+    const CollisionMesh& mesh,
+    const glm::vec3&     origin,
+    const glm::vec3&     direction,
+    float                maxDist,
+    float&               outHitDist)
+{
+    glm::vec3 end   = origin + direction * maxDist;
+    glm::vec3 mid   = (origin + end) * 0.5f;
+    float     radius = maxDist * 0.5f + 1.0f;
+
+    auto candidates = QueryGrid(mesh.grid, mid, radius);
+
+    float closestT = maxDist;
+    bool  hit      = false;
+
+    for (int idx : candidates)
+    {
+        const CollisionTriangle& tri = mesh.triangles[idx];
+        float t;
+        if (RayVsTriangle(origin, direction, tri.v0, tri.v1, tri.v2, t))
+        {
+            if (t > 0.0f && t < closestT)
+            {
+                closestT = t;
+                hit      = true;
+            }
+        }
+    }
+
+    outHitDist = closestT;
+    return hit;
 }
