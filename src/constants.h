@@ -23,7 +23,7 @@
 #define INITIAL_CAMERA_DISTANCE 5.0f
 
 // Player initial values
-#define PLAYER_INITIAL_POSITION glm::vec4(-61.76f, -0.80f, -161.26f, 1.0f) // Dentro do mapa(-38.08f, 0.74f, -161.84f, 1.0f)
+#define PLAYER_INITIAL_POSITION glm::vec4(-63.43f, 0.00f, -174.33f, 1.0f)
 #define PLAYER_INITIAL_YAW 1.57f
 #define PLAYER_INITIAL_HEALTH 50
 #define PLAYER_MAX_HEALTH 100

@@ -169,8 +169,9 @@ int main(int argc, char* argv[])
     // Objetos da cena
     g_HealthPacks.push_back(std::make_unique<HealthPack>(glm::vec4( -2.56f, 5.50f, -158.36f, 1.0f), 1.0f));
     g_HealthPacks.push_back(std::make_unique<HealthPack>(glm::vec4(-6.25f, 0.1f, -165.15f, 1.0f), 1.0f));
+    g_HealthPacks.push_back(std::make_unique<HealthPack>(glm::vec4(-39.50f, 0.1f, -176.50f, 1.0f), 1.0f));
+    g_HealthPacks.push_back(std::make_unique<HealthPack>(glm::vec4(-36.73f, 0.1f, -174.15f, 1.0f), 1.0f));
 
-    g_Guns.push_back(std::make_unique<Pistol>(glm::vec4(-6.25f, 3.1f, -165.15f, 1.0f), 2.0f, 15, 50));
 
     g_Armors.push_back(std::make_unique<Armor>(glm::vec4(11.17f, 7.20f, -161.61f, 1.0f), 1.75f, 25, 100));
 
@@ -195,6 +196,14 @@ int main(int argc, char* argv[])
 
     g_Enemies.push_back(std::make_unique<Enemy>(
         glm::vec4(-2.29f, 5.20f, -166.29f, 1.0f),
+        0.0f,
+        4.0f,
+        EnemyState::Idle
+    ));
+    g_Enemies.back()->collisionMesh = &g_CollisionMesh;
+
+    g_Enemies.push_back(std::make_unique<Enemy>(
+        glm::vec4(-10.15f, -0.40f, -155.23f, 1.0f),
         0.0f,
         4.0f,
         EnemyState::Idle
