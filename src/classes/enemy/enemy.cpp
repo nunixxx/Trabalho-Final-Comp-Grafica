@@ -30,7 +30,8 @@ Enemy::Enemy(
     , verticalVelocity(0.0f)
     , onGround(true)
     , collisionMesh(nullptr)
-    , animator("soldier")
+    , animator("enemy")
+    , targetYaw(initialYaw)
 {
     modelName   = "enemy";
     position    = initialPosition;
@@ -72,7 +73,8 @@ Enemy::Enemy(
     , verticalVelocity(0.0f)
     , onGround(true)
     , collisionMesh(nullptr)
-    , animator("soldier")
+    , animator("enemy")
+    , targetYaw(initialYaw)
 {
     modelName   = "enemy";
     position    = initialPosition;
@@ -113,13 +115,19 @@ void Enemy::update(float deltaTime, const Player* player)
             state = EnemyState::Idle;  // perdeu o player, para no lugar
     }
 
-    if (state == EnemyState::Idle)
-        return;  // parado, não faz nada
-    else if (state == EnemyState::Patrol)
+    if (state == EnemyState::Patrol)
         updatePatrol_(deltaTime);
     else if (state == EnemyState::Chase && player)
         updateChase_(deltaTime, player);
-    
+
+    // Suavização da rotação — interpola yaw em direção a targetYaw
+    {
+        float diff = targetYaw - yaw;
+        while (diff > PI)  diff -= 2.0f * PI;
+        while (diff < -PI) diff += 2.0f * PI;
+        yaw += diff * 0.15f;
+    }
+
     if (state == EnemyState::Dead)
         animator.setState(AnimationState::Dead);
     else if (state == EnemyState::Chase || state == EnemyState::Patrol)
@@ -223,7 +231,7 @@ void Enemy::updatePatrol_(float deltaTime)
 
     glm::vec4 dir = next - current;
     if (std::abs(dir.x) > 1e-5f || std::abs(dir.z) > 1e-5f)
-        yaw = std::atan2(dir.z, dir.x);
+        targetYaw = std::atan2(dir.x, dir.z);
 
     bezierT += bezierSpeed * deltaTime;
     if (bezierT > 1.0f)
@@ -277,7 +285,7 @@ void Enemy::updateChase_(float deltaTime, const Player* player)
         float dx = diff.x * invDist;
         float dz = diff.z * invDist;
 
-        yaw = std::atan2(dz, dx);
+        targetYaw = std::atan2(dx, dz);
 
         float speed = movementSpeed * deltaTime;
         position.x += dx * speed;

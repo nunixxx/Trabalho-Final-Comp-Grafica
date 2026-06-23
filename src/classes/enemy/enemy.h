@@ -173,4 +173,7 @@ private:
     void applyGravity_(float deltaTime);
 
     std::vector<glm::vec4> CreateCircularPath( glm::vec4 center, float radius);
+
+    // Suavização de rotação
+    float targetYaw;
 };
