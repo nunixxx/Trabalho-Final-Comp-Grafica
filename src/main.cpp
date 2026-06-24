@@ -151,6 +151,7 @@ int main(int argc, char* argv[])
     glfwSetScrollCallback(window, ScrollCallback);
 
     glfwMakeContextCurrent(window);
+    glfwSwapInterval(0);
     gladLoadGLLoader((GLADloadproc) glfwGetProcAddress);
 
     glfwSetFramebufferSizeCallback(window, FramebufferSizeCallback);
