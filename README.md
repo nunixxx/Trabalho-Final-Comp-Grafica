@@ -1,7 +1,7 @@
 # Doom E1M1 — 3D Version
 
 **Disciplina:** Computação Gráfica e Visualização I (INF01047) — INF/UFRGS  
-**Autores:** Caio Felipe Ferreira Nunes (00588024), João Kenji Suwa (00587808)
+**Autores:** Caio Felipe Ferreira Nunes, João Kenji Suwa
 
 Jogo 3D em C++/OpenGL que recria a primeira fase (*E1M1*) de *Doom* (1993), desenvolvido como trabalho final da disciplina.
 
