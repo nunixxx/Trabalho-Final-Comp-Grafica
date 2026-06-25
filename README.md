@@ -3,15 +3,47 @@
 **Disciplina:** Computação Gráfica e Visualização I (INF01047) — INF/UFRGS  
 **Autores:** Caio Felipe Ferreira Nunes, João Kenji Suwa
 
-Jogo 3D em C++/OpenGL que recria a primeira fase (*E1M1*) de *Doom* (1993), desenvolvido como trabalho final da disciplina.
+Jogo 3D em C++/OpenGL que recria parte da primeira fase (*E1M1*) de [Doom (1993)](https://pt.wikipedia.org/wiki/Doom_(jogo_eletrônico_de_1993), desenvolvido como trabalho final da disciplina de Compuração Gráfica e Visualização. 
+
+![Third Person](images/Doom3D.png)
+![First Person](images/Domm3DFirstPerson.png)
 
 ---
+## Contribuições
+`Caio Felipe Ferreira Nunes`
+- Camera FirstPerson e ThirdPerson(LookAt);
+- Renderização de objetos;
+- Refatoração do Código;
+- Mapeamento de objetos dentro do mapa;
+- Logica de Colisão;
+- HitBoxes;
+- Animações dos Personagens(Player e Enemy);
+- HUD do Player;
+- Interseção com objetos;
+- Curva de Bézier no Patrol do Enemy;
+
+`João Kenji Suwa`
+- Renderização de Texturas;
+- Renderização de objetos;
+- Camera ThirdPerson(LookAt);
+- Movimenção do Player e Gravidade;
+- Implementação de Colisão;
+- Colisão de tiros;
+- Iluminação;
+- Animação dos Objetos(HealthPack e Armor);
+
+---
+## Uso de IA
+
+Durante o desenvolvimento do trabalho, foram utilizadas ferramentas de inteligência artificial tanto remotas quanto locais, incluindo Claude, ChatGPT (GPT), Gemini e ferramentas integradas ao terminal, como OpenCode Zen. Essas ferramentas foram empregadas principalmente como apoio ao desenvolvimento, auxiliando na discussão de soluções, refatoração de código, esclarecimento de conceitos, investigação de erros e tomada de decisões de projeto — por exemplo, na escolha e implementação do sistema de animação e em ajustes na organização da aplicação.
+
+De forma geral, a dupla considera que o uso dessas ferramentas contribuiu significativamente para acelerar o desenvolvimento e facilitar a exploração de alternativas técnicas. Entretanto, as sugestões fornecidas nem sempre eram diretamente aplicáveis ao contexto do projeto, exigindo validação, adaptação e análise crítica antes de serem incorporadas
 
 ## Funcionalidades
 
 | Categoria | Funcionalidades |
 |-----------|----------------|
-| **Renderização** | OpenGL 3.3 Core Profile, shaders GLSL próprios (Phong + point lights + texturas), correção gamma |
+| **Renderização** | OpenGL 3.3 Core Profile, shaders GLSL próprios (Phong + point lights + texturas) |
 | **Câmeras** | Dois modos: LookAt (órbita em 3ª pessoa) e FirstPerson (FPS com free look) |
 | **Modelos 3D** | Carregamento de arquivos `.obj` via `tinyobjloader`, registro centralizado via CSV |
 | **Texturas** | Mapeamento de texturas em todos os objetos com fallback para cores sólidas estilo Doom |
@@ -144,89 +176,19 @@ make -f Makefile.macOS run
 
 ---
 
-## Controles
+## Manual da Aplicação
 
 | Tecla | Ação |
 |-------|------|
 | `W` `A` `S` `D` | Movimentar (LookAt) / Voar (FirstPerson) |
 | Mouse (arrastar) | Rotacionar câmera / Olhar ao redor |
-| Clique esquerdo | Atirar (modo FirstPerson) |
+| Clique esquerdo | Atirar (FirstPerson) / Arrastar Camera(LookAt) |
 | Scroll | Zoom in/out (LookAt) |
 | `;` (ponto e vírgula) | Alternar modo de câmera |
 | `F1` | Mostrar/esconder hitboxes de debug |
 | `R` | Recarregar shaders em tempo real |
 | `H` | Mostrar/esconder informações na tela |
 | `Esc` | Sair |
-
----
-
-## Descrição dos Módulos Principais
-
-### Model Rendering
-Carrega modelos `.obj` via `tinyobjloader` e constrói assets OpenGL (VAO, VBO, EBO) com vértices, normais e coordenadas de textura. Cada modelo é registrado em `g_ModelRegistry` com um nome chave e pode ser desenhado com `DrawModel()`. O registro é populado a partir de `data/paths.csv`.
-
-### Collision System
-Sistema de colisão baseado em grid espacial 2D (plano XZ). O mapa é convertido em uma malha de triângulos em espaço de mundo. O jogador é representado como um cilindro (base + raio + altura). A colisão é resolvida em múltiplos passes para estabilidade.
-
-### Player
-Gerencia movimento (WASD), gravidade, pulo, dois modos de câmera (LookAt/FirstPerson) e tiro. No modo LookAt, a câmera orbita o personagem; no FirstPerson, a câmera é livre. Stats incluem health, armor e ammo.
-
-### Enemy (IA)
-Quatro estados de comportamento:
-- **Idle**: parado, sem movimento
-- **Patrol**: percorre uma curva de Bézier cúbica pré-definida
-- **Chase**: detecta o jogador dentro de um raio de visão e persegue
-- **Dead**: desativado
-
-### Animation System
-Anima personagens divididos em partes (torso, cabeça, braço direito/esquerdo, perna direita/esquerda). Cada parte tem um pivô de rotação extraído da geometria do modelo. Estados: Idle, Walking, Shooting, Dead. As transformações são calculadas com base no tempo (deltaTime).
-
-### HUD
-Sistema de heads-up display que renderiza:
-- Barra de vida (verde → vermelho conforme HP diminui)
-- Barra de armadura (amarela)
-- Munição restante
-- Indicador facial (sorriso → neutro → dor)
-- Crosshair no centro da tela
-- Flash vermelho ao tomar dano
-- Alarme pulsante de HP baixo (< 30%)
-
-### Hitbox Renderer (Debug)
-Renderiza caixas delimitadoras (AABB) como wireframe colorido ao redor de objetos da cena. Cores por tipo: inimigo (vermelho), jogador (verde), item (azul), arma (amarelo). Toggle via `F1`.
-
----
-
-## Configuração
-
-### Registro de Modelos (`data/paths.csv`)
-
-O arquivo CSV associa nomes lógicos a caminhos de modelos e texturas:
-
-```csv
-Name,Model,Texture,UseTexture
-soldier,Soldier/newSoldier.obj,Soldier/,true
-map,Map/Doom_E1M1.obj,Map/,true
-enemy,Enemy/newEnemy.obj,Enemy/,true
-pistol,Pistol/gun_marvin.obj,Pistol/,true
-healthpack,Healthpack/HealthpackTextured.Obj,Healthpack/,true
-armor,Armor/SM_Pickup_Armor.obj,Armor/,true
-```
-
-### Constantes (`src/constants.h`)
-
-Parâmetros ajustáveis do jogo: velocidade do jogador, gravidade, força do pulo, posição inicial, HP, armadura, alcance da câmera, planos near/far, etc.
-
----
-
-## Limitações Conhecidas
-
-- **Hotbar**: não implementada — apenas stats via HUD textual
-- **Fase parcial**: apenas parte do cenário E1M1 foi modelada
-- **Sem áudio**: não há música ou efeitos sonoros
-- **Sem menu/tela de título**: o jogo inicia diretamente na fase
-- **Inimigos sem ataque à distância**: apenas dano por contato físico
-- **Animações sem blending**: transições entre estados são instantâneas
-- **Apenas uma fase**: não há seleção de níveis
 
 ---
 
