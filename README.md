@@ -5,8 +5,13 @@
 
 Jogo 3D em C++/OpenGL que recria parte da primeira fase (*E1M1*) de [Doom (1993)](https://pt.wikipedia.org/wiki/Doom_(jogo_eletrônico_de_1993), desenvolvido como trabalho final da disciplina de Compuração Gráfica e Visualização. 
 
+## Third Person
+
 ![Third Person](images/Doom3D.png)
-![First Person](images/Domm3DFirstPerson.png)
+
+## First Person
+
+![First Person](images/Doom3DFirstPerson.png)
 
 ---
 ## Contribuições
